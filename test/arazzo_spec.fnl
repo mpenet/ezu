@@ -1414,22 +1414,17 @@
 
 (describe "workflow introspection"
           (fn []
-            (it "lists inputs used as path parameters, in first-use order"
+            (it "takes the positional inputs a workflow declares, never the steps' order"
                 (fn []
-                  (let [wf {:steps [{:parameters [{:in :path
+                  (let [wf {:x-ezu-args ["first" "second"]
+                            :steps [{:parameters [{:in :path
                                                    :name "b"
-                                                   :value "$inputs.second"}
-                                                  {:in :query
-                                                   :name "q"
-                                                   :value "$inputs.query"}]}
-                                    {:parameters [{:in :path
-                                                   :name "a"
-                                                   :value "$inputs.first"}
-                                                  {:in :path
-                                                   :name "c"
                                                    :value "$inputs.second"}]}]}]
-                    (assert.are.same ["second" "first"]
-                                     (arazzo.positional-inputs wf)))))
+                    (assert.are.same ["first" "second"]
+                                     (arazzo.positional-inputs wf))
+                    (assert.are.same []
+                                     (arazzo.positional-inputs {:steps (. wf
+                                                                          :steps)})))))
             (it "resolves $ref'd inputs schemas against the document"
                 (fn []
                   (let [doc {:components {:inputs {:create {:type "object"

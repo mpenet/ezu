@@ -195,7 +195,7 @@ An [Arazzo](https://spec.openapis.org/arazzo/latest.html) document describes a s
 $ ezu az doc/examples/petstore.arazzo.yaml
 first-pet  Find the first pet with a given status and fetch its details.
 
-$ ezu az doc/examples/petstore.arazzo.yaml first-pet -i status=sold --output yaml
+$ ezu az doc/examples/petstore.arazzo.yaml first-pet status=sold --output yaml
 name: doggie-updated
 status: sold
 ```

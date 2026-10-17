@@ -618,7 +618,7 @@ does, which a streaming transport hands over one by one."
           (fn []
             (it "runs a workflow with the context's profile and prints outputs in its format"
                 (fn []
-                  (let [r (ezu-run ["az" "flows" "fetchPet" "-i" "id=7"]
+                  (let [r (ezu-run ["az" "flows" "fetchPet" "id=7"]
                                    {"GET https://api.test/pets/7" (respond 200
                                                                            {:name "Rex"})})]
                     (assert.are.equal 0 r.code)
@@ -635,7 +635,7 @@ does, which a streaming transport hands over one by one."
                          (.. (os.getenv "PWD") "/test/fixtures/cli-api.json"))
                     (with-open [f (io.open file :w)]
                       (f:write (json.encode flow)))
-                    (let [r (ezu-run ["az" file "fetchPet" "-i" "id=7"]
+                    (let [r (ezu-run ["az" file "fetchPet" "id=7"]
                                      {"GET https://api.test/pets/7" (respond 200
                                                                              {:name "Rex"})})]
                       (os.remove file)
@@ -647,7 +647,6 @@ does, which a streaming transport hands over one by one."
                   (let [r (ezu-run ["az"
                                     "flows"
                                     "fetchPet"
-                                    "-i"
                                     "id=7"
                                     "--output=csv"]
                                    {"GET https://api.test/pets/7" (respond 200
@@ -670,7 +669,6 @@ does, which a streaming transport hands over one by one."
                   (let [r (ezu-run ["az"
                                     "flows"
                                     "fetchPet"
-                                    "-i"
                                     "id=7"
                                     "--arazzo-output"
                                     "steps"]
@@ -684,7 +682,6 @@ does, which a streaming transport hands over one by one."
                   (let [r (ezu-run ["az"
                                     "flows"
                                     "fetchPet"
-                                    "-i"
                                     "id=7"
                                     "--arazzo-output"
                                     "full"]
@@ -693,30 +690,79 @@ does, which a streaming transport hands over one by one."
                     (assert.are.equal 0 r.code)
                     (assert.are.equal "--- get request ---\noperation: getPet\n--- get response HTTP 200 ---\nname: Rex\n--- outputs ---\nname: Rex"
                                       r.out))))
+            (it "takes inputs as name=value, typed, over --inputs"
+                (fn []
+                  (let [r (ezu-run ["az"
+                                    "flows"
+                                    "fetchPet"
+                                    "--inputs"
+                                    "{\"id\": \"1\"}"
+                                    "id=7"]
+                                   {"GET https://api.test/pets/7" (respond 200
+                                                                           {:name "Rex"})})]
+                    (assert.are.equal 0 r.code r.err)
+                    (assert.are.equal 1 (length r.requests)))))
+            (it "refuses a name it doesn't know, saying which it meant"
+                (fn []
+                  (let [r (ezu-run ["az" "flows" "fetchPet" "idd=7"])]
+                    (assert.are.equal 1 r.code)
+                    (assert.is_truthy (r.err:find "no input 'idd' in fetchPet; did you mean id?"
+                                                  1 true)
+                                      r.err)
+                    (assert.are.equal 0 (length r.requests)))))
+            (it "takes positional values only for the inputs a workflow declares"
+                (fn []
+                  (let [r (ezu-run ["az" "flows" "fetchPet" "7"])]
+                    (assert.are.equal 1 r.code)
+                    (assert.is_truthy (r.err:find "fetchPet takes no positional arguments: give inputs as name=value"
+                                                  1 true)
+                                      r.err))
+                  (let [json (require :ezu.json)
+                        flow (with-open [f (io.open "test/fixtures/cli-flow.arazzo.json")]
+                               (json.decode (f:read :*a)))
+                        file (.. (os.tmpname) ".json")]
+                    (set (. flow :sourceDescriptions 1 :url)
+                         (.. (os.getenv "PWD") "/test/fixtures/cli-api.json"))
+                    (set (. flow :workflows 1 :x-ezu-args) ["id"])
+                    (with-open [f (io.open file :w)]
+                      (f:write (json.encode flow)))
+                    (let [routes {"GET https://api.test/pets/7" (respond 200
+                                                                         {:name "Rex"})}
+                          ok (ezu-run ["az" file "fetchPet" "7"] routes)
+                          extra (ezu-run ["az" file "fetchPet" "7" "8"] routes)
+                          lookalike (ezu-run ["az" file "fetchPet" "aGVsbG8="]
+                                             routes)
+                          help (ezu-run ["az" file "fetchPet" "--help"])]
+                      (os.remove file)
+                      (assert.are.equal 0 ok.code ok.err)
+                      (assert.are.equal 1 extra.code)
+                      (assert.is_truthy (extra.err:find "fetchPet takes 1 positional argument (id), not 8"
+                                                        1 true)
+                                        extra.err)
+                      (assert.are.equal 1 lookalike.code)
+                      (assert.is_truthy (lookalike.err:find "to pass it as id, write id=aGVsbG8="
+                                                            1 true)
+                                        lookalike.err)
+                      (assert.is_truthy (help.out:find "fetchPet <id> [name=value ...]"
+                                                       1 true)
+                                        help.out)))))
+            (it "says how inputs are given now to -i and --i."
+                (fn []
+                  (each [_ args (ipairs [["-i" "id=7"]
+                                         ["--i.id=7"]
+                                         ["--input.id=7"]])]
+                    (let [r (ezu-run (doto ["az" "flows" "fetchPet"]
+                                       (#(each [_ a (ipairs args)]
+                                           (table.insert $ a)))))]
+                      (assert.are.equal 1 r.code)
+                      (assert.is_truthy (r.err:find "workflow inputs are name=value arguments, like id=7"
+                                                    1 true)
+                                        r.err)))))
             (it "lists the workflows of a document"
                 (fn []
                   (let [r (ezu-run ["az" "flows"])]
                     (assert.are.equal 0 r.code)
                     (assert.are.equal "fetchPet" r.out))))
-            (it "takes inputs from -d and --b. fields"
-                (fn []
-                  (let [routes {"GET https://api.test/pets/7" (respond 200
-                                                                       {:name "Rex"})}]
-                    (assert.are.equal "name: Rex"
-                                      (. (ezu-run ["az"
-                                                   "flows"
-                                                   "fetchPet"
-                                                   "-d"
-                                                   "{\"id\": \"7\"}"]
-                                                  routes)
-                                         :out))
-                    (assert.are.equal "name: Rex"
-                                      (. (ezu-run ["az"
-                                                   "flows"
-                                                   "fetchPet"
-                                                   "--b.id=7"]
-                                                  routes)
-                                         :out)))))
             (it "prints workflow help"
                 (fn []
                   (let [r (ezu-run ["az" "flows" "fetchPet" "--help"])]
@@ -758,7 +804,6 @@ does, which a streaming transport hands over one by one."
                   (let [r (ezu-run ["az"
                                     "flows"
                                     "fetchPet"
-                                    "-i"
                                     "id=7"
                                     "--profile"
                                     "typo"])]
@@ -779,7 +824,6 @@ does, which a streaming transport hands over one by one."
                   (let [r (ezu-run ["az"
                                     "flows"
                                     "fetchPet"
-                                    "-i"
                                     "id=7"
                                     "--arazzo-output"
                                     "progress"])]
@@ -793,7 +837,6 @@ does, which a streaming transport hands over one by one."
                   (let [r (ezu-run ["az"
                                     "flows"
                                     "fetchPet"
-                                    "-i"
                                     "id=7"
                                     "--arazzo-output"
                                     "progress"]
@@ -847,7 +890,7 @@ does, which a streaming transport hands over one by one."
                                         one.out)))))
             (it "fails with exit 1 when a step fails"
                 (fn []
-                  (let [r (ezu-run ["az" "flows" "fetchPet" "-i" "id=7"])]
+                  (let [r (ezu-run ["az" "flows" "fetchPet" "id=7"])]
                     (assert.are.equal 1 r.code)
                     (assert.is_truthy (r.err:find "step 'get' failed: $statusCode == 200 ($statusCode is 404); HTTP 404"
                                                   1 true)))))))
@@ -919,12 +962,6 @@ does, which a streaming transport hands over one by one."
                                                [["az"
                                                  "flows"
                                                  "fetchPet"
-                                                 "-i"
-                                                 ".=1"]
-                                                "has no field name"]
-                                               [["az"
-                                                 "flows"
-                                                 "fetchPet"
                                                  "--inputs"
                                                  "5"]
                                                 "--inputs must be an object"]
@@ -933,7 +970,7 @@ does, which a streaming transport hands over one by one."
                                                  "fetchPet"
                                                  "-d"
                                                  "\"s\""]
-                                                "--body must be an object"]])]
+                                                "doesn't apply to az"]])]
                     (let [r (ezu-run args)]
                       (assert.are.equal 1 r.code)
                       (assert.is_truthy (r.err:find msg 1 true) r.err)))))
@@ -1432,7 +1469,7 @@ does, which a streaming transport hands over one by one."
                 (fn []
                   (let [r (ezu-run ["op" "p" "list-pets" "-i" "a=1"])]
                     (assert.are.equal 1 r.code)
-                    (assert.is_truthy (r.err:find "doesn't apply to op (it is for az)"
+                    (assert.is_truthy (r.err:find "-i is gone: workflow inputs are name=value arguments"
                                                   1 true)))))))
 
 (describe "ezu profile import-restish"

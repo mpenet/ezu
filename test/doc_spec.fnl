@@ -193,7 +193,7 @@
                     (assert.is_truthy (text:find "^createAndWait\n\nCreate a resource and wait until ready\nPolls until the operation finishes%.\n"))))
               (it "shows usage with positional inputs"
                   (fn []
-                    (assert.is_truthy (text:find "Usage: ezu az <name-or-file> createAndWait <id> [-i KEY=VAL ...]"
+                    (assert.is_truthy (text:find "Usage: ezu az <name-or-file> createAndWait <id> [name=value ...]"
                                                  1 true))))
               (it "lists inputs sorted, required first, with details"
                   (fn []

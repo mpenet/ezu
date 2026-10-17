@@ -78,4 +78,4 @@ eval "$(ezu completion bash)"
 eval "$(ezu completion zsh)"
 ```
 
-Completion offers commands, profile names, operations (fish also shows their summaries), the declared query parameters and headers after `--q.` and `--h.`, the body's properties after `--b.`, server variables after `--server.`, allowed values after `NAME=`, workflow documents, workflows and their inputs after `--i.`, and the options of the current command. Specs come from the schema cache, so completion doesn't wait for the network once a spec has been used.
+Completion offers commands, profile names, operations (fish also shows their summaries), the declared query parameters and headers after `--q.` and `--h.`, the body's properties after `--b.`, server variables after `--server.`, allowed values after `NAME=`, workflow documents, workflows and their inputs (`NAME=`), and the options of the current command. Specs come from the schema cache, so completion doesn't wait for the network once a spec has been used.

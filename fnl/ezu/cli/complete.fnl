@@ -226,6 +226,21 @@ operation, or an Arazzo document's workflow and inputs."
         (icollect [_ wf (ipairs (or (?. context :doc :workflows) []))]
           {:value wf.workflowId :help wf.summary}) [])))
 
+(fn input-entries [context positional current]
+  "Workflow inputs as name= (those not given yet), or the values of the one
+being typed (name=…)."
+  (let [props (or (schema-field (?. context :inputs) :properties) {})
+        name (current:match "^([%a_][%w_%-]*)=")]
+    (if name
+        (icollect [_ v (ipairs (or (enum-of (. props name)) []))]
+          {:value (.. name "=" (tostring v))})
+        (let [given (collect [_ w (ipairs positional)]
+                      (let [n (w:match "^([%a_][%w_%-]*)[%.=]")]
+                        (when n (values n true))))]
+          (icollect [_ n (ipairs (sorted-keys props))]
+            (when (not (. given n))
+              {:value (.. n "=") :help (schema-field (. props n) :description)}))))))
+
 (fn complete-entries [line ctx]
   "Completion candidates {:value :help} for a command line typed up to the cursor."
   (let [(words current positional) (split-line line)
@@ -256,6 +271,8 @@ operation, or an Arazzo document's workflow and inputs."
                             (table.insert offered
                                           {:value "--dry-run" :help o.help}))))
                       offered)
+                    (and (= cmd :az) (>= (length positional) 3))
+                    (input-entries context positional current)
                     (positional-entries (or ctx.config {}) positional context))
         matching (icollect [_ e (ipairs entries)]
                    (when (= current (e.value:sub 1 (length current)))

@@ -82,7 +82,7 @@ Options go anywhere after the command. `--name=value` and `--name value` are equ
 
 | Option | Description |
 |--------|-------------|
-| `-i KEY=VAL`, `--i.KEY=VAL`, `--input.KEY=VAL` | Workflow input |
+| `NAME=VALUE` | A workflow input, typed from its schema; see [Inputs](arazzo.md#inputs) |
 | `--inputs=VALUE` | All inputs as a JSON or YAML object, inline or `@file` |
 | `--profile=NAME` | Profile to authenticate with |
 | `--arazzo-output=MODE` | `final` (default), `steps`, `progress` or `full`; see [Output modes](arazzo.md#output-modes) |

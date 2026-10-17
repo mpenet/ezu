@@ -52,7 +52,7 @@ inputs JSON Schema; positional lists inputs that may be passed positionally."
       (add wf.description))
     (add (.. "\nUsage: ezu az <name-or-file> " wf.workflowId
              (table.concat (icollect [_ n (ipairs positional)] (.. " <" n ">")))
-             " [-i KEY=VAL ...]"))
+             " [name=value ...]"))
     (if (= 0 (length names))
         (add "\nInputs: none")
         (do

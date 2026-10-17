@@ -280,6 +280,19 @@
                                               clients)]
                     (assert.are.same ["wf › failureActions bad: goto to unknown step 'nope'"]
                                      (messages problems)))))
+            (it "finds positional arguments that aren't inputs"
+                (fn []
+                  (let [problems (check.check (doc [get-pet]
+                                                   {:x-ezu-args ["id"
+                                                                 "nope"
+                                                                 "id"]})
+                                              clients)]
+                    (assert.is_true (has problems
+                                         "wf: x-ezu-args names 'nope', which isn't an input"
+                                         :error))
+                    (assert.is_true (has problems
+                                         "wf: x-ezu-args names 'id' twice"
+                                         :error)))))
             (it "finds references to components that don't exist"
                 (fn []
                   (assert.is_true (has (check.check (doc [(step {:parameters [{:reference "$components.parameters.trace"}]})])

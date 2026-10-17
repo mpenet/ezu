@@ -92,6 +92,29 @@ controls and the overrides that reorder text on screen as \\u{HHHH}."
   "Whether file descriptor fd (1 stdout, 2 stderr) is a terminal."
   (= true (os.execute (.. "test -t " fd))))
 
+(fn edit-distance [a b]
+  "The number of one-character insertions, deletions or substitutions that
+turn a into b (Levenshtein)."
+  (var previous (fcollect [j 0 (length b)] j))
+  (for [i 1 (length a)]
+    (let [row [i]]
+      (for [j 1 (length b)]
+        (table.insert row
+                      (math.min (+ 1 (. previous (+ j 1))) (+ 1 (. row j))
+                                (+ (. previous j)
+                                   (if (= (a:sub i i) (b:sub j j)) 0 1)))))
+      (set previous row)))
+  (. previous (+ (length b) 1)))
+
+(fn closest [name candidates]
+  "The candidate closest to name, when close enough to be a likely typo."
+  (let [limit (math.max 2 (math.floor (/ (length name) 3)))]
+    (accumulate [best nil _ c (ipairs candidates)]
+      (let [d (edit-distance name c)]
+        (if (and (<= d limit) (or (= best nil) (< d (edit-distance name best))))
+            c
+            best)))))
+
 (fn duration [seconds]
   "seconds for a person: 205ms, 1.50s, 12.3s, 2m03s."
   (if (< seconds 1)
@@ -433,6 +456,7 @@ inside them are safe."
  : terminal?
  : terminal-columns
  : duration
+ : closest
  : query-has?
  : permanent-error
  : secret-name?

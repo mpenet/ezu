@@ -9,8 +9,6 @@
         :h :header
         :body :body
         :b :body
-        :input :input
-        :i :input
         :server :server
         :ssl :ssl})
 
@@ -35,11 +33,13 @@
          :key :body
          :value :body
          :shown "--body=JSON, -d JSON"
-         :scope :any
+         :scope :op
+         :also [:http]
          :help "Request body: inline JSON/YAML, @file or @- for stdin"}
         {:family "--b."
          :shown "--body.KEY=VAL"
-         :scope :any
+         :scope :op
+         :also [:http]
          :help "Body field, deep dot paths (short: --b.KEY=VAL)"}
         {:family "--q."
          :shown "--query.KEY=VAL"
@@ -204,15 +204,6 @@
          :scope :az
          :also [:http]
          :help "Profile for auth, TLS and headers"}
-        {:names ["-i"]
-         :value :input
-         :shown "-i KEY=VAL"
-         :scope :az
-         :help "Workflow input"}
-        {:family "--i."
-         :shown "--input.KEY=VAL"
-         :scope :az
-         :help "Workflow input (short: --i.KEY=VAL)"}
         {:names ["--inputs"]
          :key :arazzo-inputs-blob
          :value :inputs
@@ -263,7 +254,7 @@ returns (kind key value); kind is a value of field-prefixes."
     (when kind
       (values kind k v))))
 
-(local short-prefixes {:query "--q." :header "--h." :body "--b." :input "--i."})
+(local short-prefixes {:query "--q." :header "--h." :body "--b."})
 
 (local ssl-options {:cafile true
                     :capath true
@@ -294,7 +285,6 @@ returns (kind key value); kind is a value of field-prefixes."
                     v))
           (tset r.headers k v)))
     :body (table.insert r.body-fields [k v])
-    :input (table.insert r.input-fields [k v])
     :server (tset r.server-vars k v)
     :ssl (if (. ssl-options k)
              (tset r.ssl k v)
@@ -367,19 +357,22 @@ returns (kind key value); kind is a value of field-prefixes."
            :headers {}
            :ssl {}
            :server-vars {}
-           :body-fields []
-           :input-fields []}
+           :body-fields []}
         positional (fn [a]
                      (if (not r.cmd) (tset r :cmd a)
                          (not r.schema) (tset r :schema a)
                          (not r.operation) (tset r :operation a)
                          (table.insert r.path-params a)))
-        used []
-        input-pair (fn [kv]
-                     (let [(k v) (kv:match "^(.-)=(.*)$")]
-                       (assert k (.. "invalid -i argument (expected KEY=VAL): "
-                                     kv))
-                       (add-field r :input k v)))]
+        used [] ;; how workflow inputs were once given: say how they are now
+        removed-input (fn [a next-arg]
+                        (let [example (or (a:match "^%-%-i%.(.+=.*)$")
+                                          (a:match "^%-%-input%.(.+=.*)$")
+                                          (a:match "^%-i(.+=.*)$") next-arg
+                                          "name=value")]
+                          (error (.. a
+                                     " is gone: workflow inputs are name=value arguments, like "
+                                     example)
+                                 0)))]
     (var i 1)
     (var options-done false)
     (while (<= i (length args))
@@ -392,10 +385,9 @@ returns (kind key value); kind is a value of field-prefixes."
                              (?. family-options kind :scope)
                              (?. family-options kind :also)])
               (add-field r kind k v)) ;; -iKEY=VAL, glued
-            (a:match "^%-i.+=")
-            (do
-              (table.insert used ["-i" :az])
-              (input-pair (a:sub 3)))
+            (or (= a "-i") (a:match "^%-i.+=") (a:match "^%-%-i%.")
+                (a:match "^%-%-input%."))
+            (removed-input a (. args (+ i 1)))
             (let [(name inline) (if (a:find "=" 1 true)
                                     (a:match "^([^=]+)=(.*)$")
                                     a)
@@ -411,9 +403,7 @@ returns (kind key value); kind is a value of field-prefixes."
                                   (set i (+ i 1))
                                   (or (. args i)
                                       (error (.. name " requires a value") 0))))]
-                    (if (= opt.value :input)
-                        (input-pair raw)
-                        (tset r opt.key (option-value name opt raw))))))))
+                    (tset r opt.key (option-value name opt raw)))))))
       (set i (+ i 1)))
     (check-scopes r.cmd used)
     r))

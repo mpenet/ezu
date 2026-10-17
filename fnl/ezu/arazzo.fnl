@@ -674,19 +674,13 @@ messages), and a dependsOn that sequential execution can't satisfy."
 ;; ---- introspection ----
 
 (fn positional-inputs [wf]
-  "Input names used as path parameters by the workflow's steps, in first-use
-order; the CLI accepts these as positional arguments."
-  (let [seen {}
-        names []]
-    (each [_ step (ipairs (or wf.steps []))]
-      (each [_ param (ipairs (or step.parameters []))]
-        (when (= param.in :path)
-          (let [input-name (and (= (type param.value) :string)
-                                (param.value:match "^%$inputs%.(.+)$"))]
-            (when (and input-name (not (. seen input-name)))
-              (tset seen input-name true)
-              (table.insert names input-name))))))
-    names))
+  "The inputs the CLI takes as positional arguments, in order: what the
+workflow declares in x-ezu-args, an ezu extension."
+  (let [declared (. wf :x-ezu-args)]
+    (if (= (type declared) :table)
+        (icollect [_ name (ipairs declared)]
+          (when (= (type name) :string) name))
+        [])))
 
 (fn workflow-inputs [doc wf]
   "The workflow's inputs JSON Schema with $refs resolved, or nil."

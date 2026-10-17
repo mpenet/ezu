@@ -26,13 +26,10 @@
                                            "x"
                                            "--query.q="
                                            "--header.x-a="
-                                           "--body.s="
-                                           "--input.i="
-                                           "-ij="])]
+                                           "--body.s="])]
                     (assert.are.equal "" p.query.q)
                     (assert.are.equal "" (. p.headers :x-a))
-                    (assert.are.same [["s" ""]] p.body-fields)
-                    (assert.are.same [["i" ""] ["j" ""]] p.input-fields))))
+                    (assert.are.same [["s" ""]] p.body-fields))))
             (it "parses --max-gotos"
                 (fn []
                   (assert.are.equal 500
@@ -52,12 +49,10 @@
                 (fn []
                   (assert.has.error #(cli.parse-args ["op" "api" "--qeury.x=1"])
                                     "unknown option: --qeury.x=1")))
-            (it "requires a value after -d and -i"
+            (it "requires a value after -d"
                 (fn []
                   (assert.has.error #(cli.parse-args ["op" "api" "mk" "-d"])
-                                    "-d requires a value")
-                  (assert.has.error #(cli.parse-args ["az" "f" "wf" "-i"])
-                                    "-i requires a value")))
+                                    "-d requires a value")))
             (it "treats everything after -- as positional"
                 (fn []
                   (let [p (cli.parse-args ["op"
@@ -764,26 +759,23 @@
 
 (describe "cli short aliases"
           (fn []
-            (it "accepts --q. --h. --b. --i. like their long forms"
+            (it "accepts --q. --h. --b. like their long forms"
                 (fn []
                   (let [short (cli.parse-args ["any"
                                                "a"
                                                "x"
                                                "--q.status=ok"
                                                "--h.x-trace=t"
-                                               "--b.pet.name=Rex"
-                                               "--i.zone=z"])
+                                               "--b.pet.name=Rex"])
                         long (cli.parse-args ["any"
                                               "a"
                                               "x"
                                               "--query.status=ok"
                                               "--header.x-trace=t"
-                                              "--body.pet.name=Rex"
-                                              "--input.zone=z"])]
+                                              "--body.pet.name=Rex"])]
                     (assert.are.same long.query short.query)
                     (assert.are.same long.headers short.headers)
                     (assert.are.same long.body-fields short.body-fields)
-                    (assert.are.same long.input-fields short.input-fields)
                     (assert.are.same {:status "ok"} short.query))))
             (it "keeps field order across short and long forms"
                 (fn []
@@ -1081,10 +1073,14 @@
                   (assert.are.same ["flows"] (complete "az "))
                   (assert.are.same ["createPet" "deletePet"]
                                    (complete "az flows "))
-                  (assert.are.same ["--i.name=" "--i.zone="]
-                                   (complete "az flows createPet --i."))
-                  (assert.are.same ["--i.zone=z1" "--i.zone=z2"]
-                                   (complete "az flows createPet --i.zone="))))
+                  (assert.are.same ["name=" "zone="]
+                                   (complete "az flows createPet "))
+                  (assert.are.same ["zone="] (complete "az flows createPet zo"))
+                  (assert.are.same ["zone=z1" "zone=z2"]
+                                   (complete "az flows createPet zone="))
+                  ;; an input already given isn't offered again
+                  (assert.are.same ["zone="]
+                                   (complete "az flows createPet name=Rex "))))
             (it "completes operations of a profile that inherits its schema"
                 (fn []
                   (assert.are.same (icollect [_ e (ipairs (cli.complete-line "op exo "

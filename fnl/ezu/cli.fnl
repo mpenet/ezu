@@ -221,24 +221,61 @@ profiles are kept. --dry-run prints the converted profiles instead."
     (die (.. name " must be an object of workflow inputs")))
   (or value {}))
 
+(fn assignment [arg]
+  "(input key value) of a name=value argument, key its dotted path and input
+the name it starts with; nil for an argument that doesn't look like one."
+  (let [(key value) (arg:match "^([%a_][%w_%.%-]*)=(.*)$")]
+    (when key
+      (values (key:match "^[^%.]+") key value))))
+
+(fn workflow-arguments [wf schema args]
+  "Input fields [[key value] ...] from the arguments after the workflow id:
+name=value assignments of its inputs, and positional values for the ones it
+declares positional (x-ezu-args). Anything else stops, saying what to write:
+an argument shaped like name=value is always taken for one, so a mistyped
+name can't pass for a positional value."
+  (let [names (doto (icollect [k (pairs (or (?. schema :properties) {}))]
+                      k)
+                (table.sort))
+        known (collect [_ k (ipairs names)]
+                k
+                true)
+        slots (arazzo.positional-inputs wf)
+        id wf.workflowId
+        fields []]
+    (var next-slot 1)
+    (each [_ a (ipairs args)]
+      (let [(input key value) (assignment a)
+            slot (. slots next-slot)]
+        (if (and input (. known input)) (table.insert fields [key value]) input
+            (let [guess (util.closest input names)]
+              (die (.. "no input '" input "' in " id
+                       (if guess (.. "; did you mean " guess "?") slot
+                           (.. "; to pass it as " slot ", write " slot "=" a) ""))))
+            slot (do
+                  (table.insert fields [slot a])
+                  (set next-slot (+ next-slot 1)))
+            (= 0 (length slots))
+            (die (.. id
+                     " takes no positional arguments: give inputs as name=value"
+                     (if (. names 1) (.. ", like " (. names 1) "=" a) "")))
+            (die (string.format "%s takes %d positional argument%s (%s), not %s"
+                                id (length slots)
+                                (if (= 1 (length slots)) "" "s")
+                                (table.concat slots ", ") a)))))
+    fields))
+
 (fn workflow-inputs [p named doc wf]
   "Inputs for a run, lowest priority first: the context's configured inputs,
-positional path params, --inputs, --body, then --i./-i/--b. fields."
-  (let [base (collect [k v (pairs (or (?. named :inputs) {}))]
+--inputs, then the arguments after the workflow id, typed by the workflow's
+inputs schema."
+  (let [schema (arazzo.workflow-inputs doc wf)
+        base (collect [k v (pairs (or (?. named :inputs) {}))]
                k
                v)]
-    (each [j name (ipairs (arazzo.positional-inputs wf))]
-      (let [v (. p.path-params j)]
-        (when v (tset base name v))))
     (each [k v (pairs (object-option "--inputs" p.arazzo-inputs-blob))]
       (tset base k v))
-    (when p.body
-      (each [k v (pairs (object-option "--body" (decode-structured p.body)))]
-        (tset base k v)))
-    (let [fields (icollect [_ f (ipairs p.input-fields)] f)]
-      (each [_ f (ipairs p.body-fields)]
-        (table.insert fields f))
-      (build-body fields (arazzo.workflow-inputs doc wf) base))))
+    (build-body (workflow-arguments wf schema p.path-params) schema base)))
 
 (fn check-inputs [doc wf inputs p]
   "Stop when inputs don't match the workflow's inputs schema, unless --no-validate."
@@ -390,7 +427,7 @@ context's."
   (when (or p.dry-run p.curl)
     (die "--dry-run/--curl are not supported for az: later steps depend on real responses; use -v to log each request"))
   (when (not p.schema)
-    (usage-with-choices "Usage: ezu az <name-or-file> <workflow-id> [-i KEY=VAL ...]"
+    (usage-with-choices "Usage: ezu az <name-or-file> <workflow-id> [name=value ...]"
                         "Configured Arazzo contexts" (or env.config.arazzo {})
                         #(or $.file "")))
   (let [{: named : doc &as context} (arazzo-context p.schema p.profile p env)

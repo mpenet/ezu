@@ -351,6 +351,23 @@ data holding them."
                   (not (. workflows dep))
                   (report :error where
                           (.. "depends on unknown workflow '" dep "'")))))
+        (let [args (. wf :x-ezu-args)
+              inputs (input-names wf)]
+          (if (and (not= nil args)
+                   (not (and (list? args)
+                             (accumulate [ok true _ a (ipairs args)
+                                          &until (not ok)]
+                               (= (type a) :string)))))
+              (report :error where "x-ezu-args must list input names")
+              (let [seen {}]
+                (each [_ a (ipairs (or args []))]
+                  (when (and inputs (not (. inputs a)))
+                    (report :error where
+                            (.. "x-ezu-args names '" a
+                                "', which isn't an input")))
+                  (when (. seen a)
+                    (report :error where (.. "x-ezu-args names '" a "' twice")))
+                  (tset seen a true)))))
         (let [scope {: wf
                      : steps
                      :wf-params (if (list? wf.parameters) wf.parameters [])}]

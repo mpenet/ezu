@@ -19,7 +19,7 @@ first-pet
 
 Find the first pet with a given status and fetch its details.
 
-Usage: ezu az <name-or-file> first-pet [-i KEY=VAL ...]
+Usage: ezu az <name-or-file> first-pet [name=value ...]
 
 Inputs:
   status           string [available|pending|sold] (default: available) — Pet status to look for
@@ -28,38 +28,45 @@ Steps:
   1. find    findPetsByStatus
   2. fetch   getPetById
 
-$ ezu az doc/examples/petstore.arazzo.yaml first-pet -i status=sold
+$ ezu az doc/examples/petstore.arazzo.yaml first-pet status=sold
 {
   "name": "doggie-updated",
   "status": "sold"
 }
 ```
 
-The document is a file path, a URL, or a [name from the configuration](#named-workflow-documents). Without a workflow id, ezu lists the workflows; with `--help`, it describes one: its inputs (type, allowed values, default, description), which inputs can be given as arguments, and its steps with what they call.
+The document is a file path, a URL, or a [name from the configuration](#named-workflow-documents). Without a workflow id, ezu lists the workflows; with `--help`, it describes one: its inputs (type, allowed values, default, description), which inputs can be given as positional arguments, and its steps with what they call.
 
 The OpenAPI documents listed in `sourceDescriptions` are loaded automatically. Relative URLs resolve against the Arazzo document's own location.
 
 ## Inputs
 
-```sh
-# one at a time
-ezu az pets first-pet -i status=sold
-ezu az pets first-pet --i.status=sold
+Inputs are `name=value` arguments after the workflow id, typed from the workflow's `inputs` schema: `size=50` is a number for an integer input, `force=true` a boolean, a repeated name builds a list (`tag=a tag=b`) and dots build objects (`labels.env=prod`).
 
-# all at once, inline or from a file
+```sh
+ezu az pets first-pet status=sold
+
+# all at once, inline or from a file; name=value arguments override them
 ezu az pets first-pet --inputs '{"status": "sold"}'
 ezu az pets first-pet --inputs @inputs.json
 ```
 
-Inputs used as path parameters (`value: $inputs.NAME` on a `path` parameter) can also be given as arguments after the workflow id, in the order they first appear in the steps:
+Arguments that start with `-` are always ezu's options, and arguments shaped like `name=value` are always inputs, so neither a new ezu option nor a new input can change what a command line means. A name the workflow doesn't declare stops ezu with a suggestion (`no input 'sise' in create; did you mean size?`).
 
-```sh
-ezu az myapi get-resource 0b6f3c2e
+A workflow can take some inputs as positional arguments by listing them in `x-ezu-args`, an ezu extension other Arazzo tools ignore:
+
+```yaml
+workflows:
+  - workflowId: get-instance
+    x-ezu-args: [id]
+    inputs: {type: object, properties: {id: {type: string}}}
 ```
 
-`-d` and `--b.` set inputs too, which reads naturally for workflows that send a body: `ezu az myapi create-vm --b.name=web --b.disk.size=50`.
+```sh
+ezu az vm get-instance 0b6f3c2e
+```
 
-When several sources set the same input, the last one in this list wins: the configured `inputs`, arguments, `--inputs`, `-d`, then `-i`, `--i.` and `--b.` fields. Field values are typed from the workflow's `inputs` schema, like `--b.` fields of an operation.
+A positional value shaped like `name=value` (a base64 id ending with `=`) is taken for an assignment; ezu then says to write it `id=…`. When several sources set the same input, the last one wins: the configured `inputs`, `--inputs`, then the arguments.
 
 Inputs are checked against the `inputs` schema before anything runs (types, required inputs, allowed values…); `--no-validate` runs the workflow anyway. Inputs that aren't given take the schema's `default`.
 

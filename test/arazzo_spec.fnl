@@ -1496,7 +1496,7 @@
                                         "outer" {} (clients-logging []) {})]
                     (assert.is_false ok)
                     (assert.is_truthy (: (tostring err) :find
-                                         "step 'sub' failed: step 'i1' failed: $statusCode == 200 ($statusCode is 500)"
+                                         "step 'sub' (inner) › step 'i1' failed: $statusCode == 200 ($statusCode is 500)"
                                          1 true)))))))
 
 (describe "goto limit"

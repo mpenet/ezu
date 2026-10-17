@@ -99,7 +99,7 @@ Each line gives the step's position, its id, what it calls, how long it took and
 
 On a terminal, a step's line is updated in place while it runs and while it polls, cut to the terminal's width; in a log, each attempt gets its own line. The steps of a workflow run by another one (a step, `dependsOn` or a `goto`) are indented.
 
-A failed workflow ends with `✗ workflow NAME failed` and the reason: the step, the criterion that failed with the values it compared, and the response's status and body (shortened). ezu exits 1. `-v` shows progress as well and logs every request, credentials redacted. Outputs use the `--output` format.
+A failed workflow ends with `✗ workflow NAME failed` and the reason: the step, the criterion that failed with the values it compared (a regex or JSONPath condition as evaluated, its `{$expressions}` replaced), and the response's status and body (shortened). When the step ran another workflow, the reason starts with the steps that led there: `step 'find' (instance-id) › step 'list' failed: …`. ezu exits 1. `-v` shows progress as well and logs every request, credentials redacted. Outputs use the `--output` format.
 
 ## A document as its own command
 
@@ -114,6 +114,14 @@ $ vm get-instance 0b6f3c2e
 ```
 
 ezu prints the command rather than running it: the name is yours to choose, and so is where the link goes. `vm completion fish` (or `bash`, `zsh`) gives the completion of the new command; `vm --help` lists its workflows. Under its own name, or a name nothing is configured for, ezu is itself.
+
+[`examples/exoscale-compute.arazzo.yaml`](examples/exoscale-compute.arazzo.yaml) makes Exoscale's `exo compute` commands such a command: instances and their snapshots, instance types, templates, SSH keys, security groups and their rules, elastic IPs, private networks, anti-affinity groups, deploy targets and block storage. Its workflows take resources by name or id, wait for each job to finish and show the result; shared steps (finding an id by name, waiting for a job) are workflows the others run.
+
+```sh
+exo-compute instance-create web1 size=large ssh-key=me labels.env=prod
+exo-compute security-group-rule-add web port=443
+exo-compute instance-stop web1 --server.zone=de-fra-1
+```
 
 ## Checking a document
 

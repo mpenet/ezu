@@ -12,6 +12,7 @@ All notable changes to ezu, named atlas until 1.0.0-beta7. The format follows [K
 
 ### Added
 
+- `doc/examples/exoscale-compute.arazzo.yaml`: Exoscale's `exo compute` commands as workflows (instances, snapshots, security groups, elastic IPs, private networks, block storage…), taking resources by name or id, to use as a command of its own (`exo-compute instance-create web1`).
 - Plugins: Lua or Fennel files listed in the configuration's `plugins` provide authentication methods, which profiles use by name. A method is a function signing each request in-process, with helpers for SHA-256, HMAC-SHA256, base64, hex, JSON and URLs; a plugin's path is absolute (or starts with `~/`), and its file and directories must belong to the user (or root, for directories) and be writable only by them. The binary carries the Fennel compiler (compressed, loaded only for a Fennel plugin), and `doc/examples/plugins/exoscale.fnl` signs Exoscale's API requests.
 - Releases include `.deb` and `.rpm` packages of the Linux binaries (x86_64 and arm64), with bash, zsh and fish completion and the licenses.
 - A document named in the configuration can be a command of its own: a link to ezu named after it (`ezu az vm --link` prints how to make one) runs its workflows (`vm create name=web1`), with its own completion (`vm completion fish`).
@@ -23,6 +24,7 @@ All notable changes to ezu, named atlas until 1.0.0-beta7. The format follows [K
 
 ### Fixed
 
+- A workflow failing on a regex or JSONPath condition shows the condition with its `{$expressions}` replaced, and says it `doesn't match` or `selects nothing in` its context; a failure inside a workflow run by a step names that workflow (`step 'find' (instance-id) › step 'list' failed: …`) rather than repeating `failed:`.
 - On a terminal that doesn't report its width, the lines of workflow progress were cut down to `…`; they now fit 80 columns.
 
 ## [1.0.0-beta7] - 2026-10-16

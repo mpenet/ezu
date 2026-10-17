@@ -624,16 +624,30 @@
                                                               {:condition "$response.body#/n > 5 && $response.body#/n < 10"}))))
               (it "shows the context of regex and JSONPath conditions"
                   (fn []
-                    (assert.are.equal "regex ^2\\d{2}$ on $statusCode (403)"
+                    (assert.are.equal "regex ^2\\d{2}$ doesn't match $statusCode (403)"
                                       (expr.explain-criterion ctx
                                                               {:condition "^2\\d{2}$"
                                                                :context "$statusCode"
                                                                :type :regex}))
-                    (assert.are.equal "jsonpath $.items[0] on $response.body ({\"n\":3,\"state\":\"pending\"})"
+                    (assert.are.equal "jsonpath $.items[0] selects nothing in $response.body ({\"n\":3,\"state\":\"pending\"})"
                                       (expr.explain-criterion ctx
                                                               {:condition "$.items[0]"
                                                                :context "$response.body"
                                                                :type :jsonpath}))))
+              (it "shows regex and JSONPath conditions with their expressions substituted"
+                  (fn []
+                    (let [named (doto (collect [k v (pairs ctx)] k v)
+                                  (tset :inputs {:name "nope"}))]
+                      (assert.are.equal "jsonpath $[?@.state == 'nope'] selects nothing in $response.body ({\"n\":3,\"state\":\"pending\"})"
+                                        (expr.explain-criterion named
+                                                                {:condition "$[?@.state == '{$inputs.name}']"
+                                                                 :context "$response.body"
+                                                                 :type :jsonpath}))
+                      (assert.are.equal "regex ^nope$ doesn't match $response.body#/state (\"pending\")"
+                                        (expr.explain-criterion named
+                                                                {:condition "^{$inputs.name}$"
+                                                                 :context "$response.body#/state"
+                                                                 :type :regex})))))
               (it "shortens long values"
                   (fn []
                     (let [long-ctx (doto (collect [k v (pairs ctx)] k v)

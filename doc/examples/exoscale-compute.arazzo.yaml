@@ -1,0 +1,2598 @@
+# Exoscale's `exo compute` commands as Arazzo workflows: resources are named
+# by name or id, changes wait for their job to finish and show the result.
+#
+# Name the document in ezu's configuration, with a profile for Exoscale:
+#
+#   "arazzo": {"exo-compute": {"file": ".../exoscale-compute.arazzo.yaml",
+#                              "profile": "exo"}}
+#
+# then make it a command (`ezu az exo-compute --link` prints how):
+#
+#   exo-compute instance-list
+#   exo-compute instance-create web1 template="Linux Ubuntu 24.04 LTS 64-bit" \
+#     size=medium ssh-key=me labels.env=prod
+#   exo-compute instance-stop web1
+#   exo-compute security-group-rule-add web port=443
+#   exo-compute instance-list --server.zone=de-fra-1
+#
+# Where exo takes a resource as NAME|ID, so do these workflows; the zone is
+# the API's server variable (--server.zone, or "server" in the profile).
+arazzo: 1.1.0
+info:
+  title: Exoscale compute
+  summary: The exo compute commands, as workflows over the Exoscale API.
+  version: 1.0.0
+sourceDescriptions:
+  - name: exoscale
+    url: https://openapi-v2.exoscale.com/source.json
+    type: openapi
+workflows:
+  # ---- operations ----
+
+  - workflowId: operation-wait
+    summary: Wait until an operation (a job) succeeds, and return what it acted on.
+    x-ezu-args: [id]
+    inputs:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+          description: Operation id
+    steps:
+      - stepId: poll
+        operationId: get-operation
+        parameters:
+          - name: id
+            in: path
+            value: $inputs.id
+        successCriteria:
+          - condition: $response.body#/state == 'success'
+        onFailure:
+          # still running: ask again in 2 seconds; a failed or timed out
+          # operation ends the workflow with an error
+          - name: pending
+            type: goto
+            stepId: poll
+            retryAfter: 2
+            criteria:
+              - condition: $response.body#/state == 'pending'
+        outputs:
+          reference: $response.body#/reference/id
+    outputs:
+      reference: $steps.poll.outputs.reference
+
+  # ---- instances ----
+
+  - workflowId: instance-id
+    summary: The id of an instance, given its name or id.
+    x-ezu-args: [instance]
+    inputs:
+      type: object
+      required: [instance]
+      properties:
+        instance:
+          type: string
+          description: Instance name or id
+    steps:
+      - stepId: find
+        operationId: list-instances
+        successCriteria:
+          - condition: $statusCode == 200
+          - context: $response.body
+            type: jsonpath
+            condition: "$.instances[?@.name == '{$inputs.instance}' || @.id == '{$inputs.instance}']"
+        outputs:
+          id:
+            context: $response.body
+            type: jsonpath
+            selector: "$.instances[?@.name == '{$inputs.instance}' || @.id == '{$inputs.instance}'].id"
+    outputs:
+      id: $steps.find.outputs.id
+
+  - workflowId: instance-list
+    summary: List the instances of the zone.
+    steps:
+      - stepId: list
+        operationId: list-instances
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          instances: $response.body#/instances
+    outputs:
+      instances: $steps.list.outputs.instances
+
+  - workflowId: instance-show
+    summary: Show an instance.
+    x-ezu-args: [instance]
+    inputs:
+      type: object
+      required: [instance]
+      properties:
+        instance:
+          type: string
+          description: Instance name or id
+    steps:
+      - stepId: find
+        workflowId: instance-id
+        parameters:
+          - name: instance
+            value: $inputs.instance
+      - stepId: show
+        operationId: get-instance
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          instance: $response.body
+    outputs:
+      instance: $steps.show.outputs.instance
+
+  - workflowId: instance-create
+    summary: Create an instance, wait until it exists, and show it.
+    x-ezu-args: [name]
+    inputs:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          description: Instance name
+        template:
+          type: string
+          description: Template name or id
+          default: Linux Ubuntu 24.04 LTS 64-bit
+        template-visibility:
+          type: string
+          enum: [public, private]
+          description: Where to look for the template
+          default: public
+        family:
+          type: string
+          description: Instance type family (standard, cpu, memory…)
+          default: standard
+        size:
+          type: string
+          description: Instance type size (micro, small, medium, large…)
+          default: medium
+        disk-size:
+          type: integer
+          description: Disk size in GiB
+          default: 50
+        ssh-key:
+          type: string
+          description: Name of an SSH key to deploy on the instance
+        private-network:
+          type: string
+          description: Name or id of a private network to attach the instance to
+        public-ip:
+          type: string
+          enum: [inet4, dual, none]
+          description: Public IP addresses to assign
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+          description: Labels, as labels.KEY=VALUE
+        user-data:
+          type: string
+          description: Cloud-init user data, base64-encoded
+    steps:
+      - stepId: template
+        operationId: list-templates
+        parameters:
+          - name: visibility
+            in: query
+            value: $inputs.template-visibility
+        successCriteria:
+          - condition: $statusCode == 200
+          - context: $response.body
+            type: jsonpath
+            condition: "$.templates[?@.name == '{$inputs.template}' || @.id == '{$inputs.template}']"
+        outputs:
+          id:
+            context: $response.body
+            type: jsonpath
+            selector: "$.templates[?@.name == '{$inputs.template}' || @.id == '{$inputs.template}'].id"
+      - stepId: instance-type
+        operationId: list-instance-types
+        successCriteria:
+          - condition: $statusCode == 200
+          - context: $response.body
+            type: jsonpath
+            condition: "$['instance-types'][?@.family == '{$inputs.family}' && @.size == '{$inputs.size}']"
+        outputs:
+          id:
+            context: $response.body
+            type: jsonpath
+            selector: "$['instance-types'][?@.family == '{$inputs.family}' && @.size == '{$inputs.size}'].id"
+      - stepId: create
+        operationId: create-instance
+        requestBody:
+          contentType: application/json
+          payload:
+            name: $inputs.name
+            template:
+              id: $steps.template.outputs.id
+            instance-type:
+              id: $steps.instance-type.outputs.id
+            disk-size: $inputs.disk-size
+            ssh-key:
+              name: $inputs.ssh-key
+            public-ip-assignment: $inputs.public-ip
+            labels: $inputs.labels
+            user-data: $inputs.user-data
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: created
+        workflowId: operation-wait
+        parameters:
+          - name: id
+            value: $steps.create.outputs.job
+        onSuccess:
+          - name: no-private-network
+            type: goto
+            stepId: show
+            criteria:
+              - condition: $inputs.private-network == null
+      - stepId: network
+        workflowId: private-network-id
+        parameters:
+          - name: private-network
+            value: $inputs.private-network
+      - stepId: attach
+        operationId: attach-instance-to-private-network
+        parameters:
+          - name: id
+            in: path
+            value: $steps.network.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            instance:
+              id: $steps.created.outputs.reference
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: attached
+        workflowId: operation-wait
+        parameters:
+          - name: id
+            value: $steps.attach.outputs.job
+      - stepId: show
+        operationId: get-instance
+        parameters:
+          - name: id
+            in: path
+            value: $steps.created.outputs.reference
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          instance: $response.body
+    outputs:
+      instance: $steps.show.outputs.instance
+
+  - workflowId: instance-update
+    summary: Rename an instance or change its labels or public IP assignment.
+    x-ezu-args: [instance]
+    inputs:
+      type: object
+      required: [instance]
+      properties:
+        instance:
+          type: string
+          description: Instance name or id
+        name:
+          type: string
+          description: New name
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+          description: Labels, as labels.KEY=VALUE; they replace the current ones
+        public-ip:
+          type: string
+          enum: [inet4, dual, none]
+          description: Public IP addresses to assign
+    steps:
+      - stepId: find
+        workflowId: instance-id
+        parameters:
+          - name: instance
+            value: $inputs.instance
+      - stepId: update
+        operationId: update-instance
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            name: $inputs.name
+            labels: $inputs.labels
+            public-ip-assignment: $inputs.public-ip
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: operation-wait
+        parameters:
+          - name: id
+            value: $steps.update.outputs.job
+      - stepId: show
+        workflowId: instance-show
+        parameters:
+          - name: instance
+            value: $steps.find.outputs.id
+    outputs:
+      instance: $steps.show.outputs.instance
+
+  - workflowId: instance-delete
+    summary: Delete an instance and wait until it is gone.
+    x-ezu-args: [instance]
+    inputs:
+      type: object
+      required: [instance]
+      properties:
+        instance:
+          type: string
+          description: Instance name or id
+    steps:
+      - stepId: find
+        workflowId: instance-id
+        parameters:
+          - name: instance
+            value: $inputs.instance
+      - stepId: delete
+        operationId: delete-instance
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: operation-wait
+        parameters:
+          - name: id
+            value: $steps.delete.outputs.job
+    outputs:
+      deleted: $steps.find.outputs.id
+
+  - workflowId: instance-start
+    summary: Start an instance.
+    x-ezu-args: [instance]
+    inputs:
+      type: object
+      required: [instance]
+      properties:
+        instance:
+          type: string
+          description: Instance name or id
+        rescue-profile:
+          type: string
+          enum: [netboot, netboot-efi]
+          description: Boot into a rescue profile
+    steps:
+      - stepId: find
+        workflowId: instance-id
+        parameters:
+          - name: instance
+            value: $inputs.instance
+      - stepId: start
+        operationId: start-instance
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            rescue-profile: $inputs.rescue-profile
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: operation-wait
+        parameters:
+          - name: id
+            value: $steps.start.outputs.job
+      - stepId: show
+        workflowId: instance-show
+        parameters:
+          - name: instance
+            value: $steps.find.outputs.id
+    outputs:
+      instance: $steps.show.outputs.instance
+
+  - workflowId: instance-stop
+    summary: Stop an instance.
+    x-ezu-args: [instance]
+    inputs:
+      type: object
+      required: [instance]
+      properties:
+        instance:
+          type: string
+          description: Instance name or id
+    steps:
+      - stepId: find
+        workflowId: instance-id
+        parameters:
+          - name: instance
+            value: $inputs.instance
+      - stepId: stop
+        operationId: stop-instance
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: operation-wait
+        parameters:
+          - name: id
+            value: $steps.stop.outputs.job
+      - stepId: show
+        workflowId: instance-show
+        parameters:
+          - name: instance
+            value: $steps.find.outputs.id
+    outputs:
+      instance: $steps.show.outputs.instance
+
+  - workflowId: instance-reboot
+    summary: Reboot an instance.
+    x-ezu-args: [instance]
+    inputs:
+      type: object
+      required: [instance]
+      properties:
+        instance:
+          type: string
+          description: Instance name or id
+    steps:
+      - stepId: find
+        workflowId: instance-id
+        parameters:
+          - name: instance
+            value: $inputs.instance
+      - stepId: reboot
+        operationId: reboot-instance
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: operation-wait
+        parameters:
+          - name: id
+            value: $steps.reboot.outputs.job
+      - stepId: show
+        workflowId: instance-show
+        parameters:
+          - name: instance
+            value: $steps.find.outputs.id
+    outputs:
+      instance: $steps.show.outputs.instance
+
+  - workflowId: instance-reset
+    summary: Reinstall an instance from a template, erasing its disk.
+    x-ezu-args: [instance]
+    inputs:
+      type: object
+      required: [instance]
+      properties:
+        instance:
+          type: string
+          description: Instance name or id
+        template:
+          type: string
+          description: Template name or id; the instance's own by default
+        template-visibility:
+          type: string
+          enum: [public, private]
+          description: Where to look for the template
+          default: public
+        disk-size:
+          type: integer
+          description: New disk size in GiB; the current one by default
+    steps:
+      - stepId: find
+        workflowId: instance-id
+        parameters:
+          - name: instance
+            value: $inputs.instance
+        onSuccess:
+          - name: same-template
+            type: goto
+            stepId: reset
+            criteria:
+              - condition: $inputs.template == null
+      - stepId: template
+        operationId: list-templates
+        parameters:
+          - name: visibility
+            in: query
+            value: $inputs.template-visibility
+        successCriteria:
+          - condition: $statusCode == 200
+          - context: $response.body
+            type: jsonpath
+            condition: "$.templates[?@.name == '{$inputs.template}' || @.id == '{$inputs.template}']"
+        outputs:
+          id:
+            context: $response.body
+            type: jsonpath
+            selector: "$.templates[?@.name == '{$inputs.template}' || @.id == '{$inputs.template}'].id"
+      - stepId: reset
+        operationId: reset-instance
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            template:
+              id: $steps.template.outputs.id
+            disk-size: $inputs.disk-size
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: operation-wait
+        parameters:
+          - name: id
+            value: $steps.reset.outputs.job
+      - stepId: show
+        workflowId: instance-show
+        parameters:
+          - name: instance
+            value: $steps.find.outputs.id
+    outputs:
+      instance: $steps.show.outputs.instance
+
+  - workflowId: instance-scale
+    summary: Change an instance's type; the instance must be stopped.
+    x-ezu-args: [instance, size]
+    inputs:
+      type: object
+      required: [instance, size]
+      properties:
+        instance:
+          type: string
+          description: Instance name or id
+        family:
+          type: string
+          description: Instance type family (standard, cpu, memory…)
+          default: standard
+        size:
+          type: string
+          description: Instance type size (micro, small, medium, large…)
+    steps:
+      - stepId: find
+        workflowId: instance-id
+        parameters:
+          - name: instance
+            value: $inputs.instance
+      - stepId: instance-type
+        operationId: list-instance-types
+        successCriteria:
+          - condition: $statusCode == 200
+          - context: $response.body
+            type: jsonpath
+            condition: "$['instance-types'][?@.family == '{$inputs.family}' && @.size == '{$inputs.size}']"
+        outputs:
+          id:
+            context: $response.body
+            type: jsonpath
+            selector: "$['instance-types'][?@.family == '{$inputs.family}' && @.size == '{$inputs.size}'].id"
+      - stepId: scale
+        operationId: scale-instance
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            instance-type:
+              id: $steps.instance-type.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: operation-wait
+        parameters:
+          - name: id
+            value: $steps.scale.outputs.job
+      - stepId: show
+        workflowId: instance-show
+        parameters:
+          - name: instance
+            value: $steps.find.outputs.id
+    outputs:
+      instance: $steps.show.outputs.instance
+
+  - workflowId: instance-resize-disk
+    summary: Grow an instance's disk; the instance must be stopped.
+    x-ezu-args: [instance, disk-size]
+    inputs:
+      type: object
+      required: [instance, disk-size]
+      properties:
+        instance:
+          type: string
+          description: Instance name or id
+        disk-size:
+          type: integer
+          description: New disk size in GiB
+    steps:
+      - stepId: find
+        workflowId: instance-id
+        parameters:
+          - name: instance
+            value: $inputs.instance
+      - stepId: resize
+        operationId: resize-instance-disk
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            disk-size: $inputs.disk-size
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: operation-wait
+        parameters:
+          - name: id
+            value: $steps.resize.outputs.job
+      - stepId: show
+        workflowId: instance-show
+        parameters:
+          - name: instance
+            value: $steps.find.outputs.id
+    outputs:
+      instance: $steps.show.outputs.instance
+
+  - workflowId: instance-reveal-password
+    summary: Show the password of an instance created from a template that sets one.
+    x-ezu-args: [instance]
+    inputs:
+      type: object
+      required: [instance]
+      properties:
+        instance:
+          type: string
+          description: Instance name or id
+    steps:
+      - stepId: find
+        workflowId: instance-id
+        parameters:
+          - name: instance
+            value: $inputs.instance
+      - stepId: reveal
+        operationId: reveal-instance-password
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          password: $response.body#/password
+    outputs:
+      password: $steps.reveal.outputs.password
+
+  - workflowId: instance-security-group-add
+    summary: Add an instance to a security group.
+    x-ezu-args: [instance, security-group]
+    inputs:
+      type: object
+      required: [instance, security-group]
+      properties:
+        instance:
+          type: string
+          description: Instance name or id
+        security-group:
+          type: string
+          description: Security group name or id
+    steps:
+      - stepId: find
+        workflowId: instance-id
+        parameters:
+          - name: instance
+            value: $inputs.instance
+      - stepId: group
+        workflowId: security-group-id
+        parameters:
+          - name: security-group
+            value: $inputs.security-group
+      - stepId: attach
+        operationId: attach-instance-to-security-group
+        parameters:
+          - name: id
+            in: path
+            value: $steps.group.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            instance:
+              id: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: operation-wait
+        parameters:
+          - name: id
+            value: $steps.attach.outputs.job
+      - stepId: show
+        workflowId: instance-show
+        parameters:
+          - name: instance
+            value: $steps.find.outputs.id
+    outputs:
+      instance: $steps.show.outputs.instance
+
+  - workflowId: instance-security-group-remove
+    summary: Remove an instance from a security group.
+    x-ezu-args: [instance, security-group]
+    inputs:
+      type: object
+      required: [instance, security-group]
+      properties:
+        instance:
+          type: string
+          description: Instance name or id
+        security-group:
+          type: string
+          description: Security group name or id
+    steps:
+      - stepId: find
+        workflowId: instance-id
+        parameters:
+          - name: instance
+            value: $inputs.instance
+      - stepId: group
+        workflowId: security-group-id
+        parameters:
+          - name: security-group
+            value: $inputs.security-group
+      - stepId: detach
+        operationId: detach-instance-from-security-group
+        parameters:
+          - name: id
+            in: path
+            value: $steps.group.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            instance:
+              id: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: operation-wait
+        parameters:
+          - name: id
+            value: $steps.detach.outputs.job
+      - stepId: show
+        workflowId: instance-show
+        parameters:
+          - name: instance
+            value: $steps.find.outputs.id
+    outputs:
+      instance: $steps.show.outputs.instance
+
+  - workflowId: instance-private-network-attach
+    summary: Attach an instance to a private network.
+    x-ezu-args: [instance, private-network]
+    inputs:
+      type: object
+      required: [instance, private-network]
+      properties:
+        instance:
+          type: string
+          description: Instance name or id
+        private-network:
+          type: string
+          description: Private network name or id
+        ip:
+          type: string
+          description: Address to give the instance, on a managed network
+    steps:
+      - stepId: find
+        workflowId: instance-id
+        parameters:
+          - name: instance
+            value: $inputs.instance
+      - stepId: network
+        workflowId: private-network-id
+        parameters:
+          - name: private-network
+            value: $inputs.private-network
+      - stepId: attach
+        operationId: attach-instance-to-private-network
+        parameters:
+          - name: id
+            in: path
+            value: $steps.network.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            instance:
+              id: $steps.find.outputs.id
+            ip: $inputs.ip
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: operation-wait
+        parameters:
+          - name: id
+            value: $steps.attach.outputs.job
+      - stepId: show
+        workflowId: instance-show
+        parameters:
+          - name: instance
+            value: $steps.find.outputs.id
+    outputs:
+      instance: $steps.show.outputs.instance
+
+  - workflowId: instance-private-network-detach
+    summary: Detach an instance from a private network.
+    x-ezu-args: [instance, private-network]
+    inputs:
+      type: object
+      required: [instance, private-network]
+      properties:
+        instance:
+          type: string
+          description: Instance name or id
+        private-network:
+          type: string
+          description: Private network name or id
+    steps:
+      - stepId: find
+        workflowId: instance-id
+        parameters:
+          - name: instance
+            value: $inputs.instance
+      - stepId: network
+        workflowId: private-network-id
+        parameters:
+          - name: private-network
+            value: $inputs.private-network
+      - stepId: detach
+        operationId: detach-instance-from-private-network
+        parameters:
+          - name: id
+            in: path
+            value: $steps.network.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            instance:
+              id: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: operation-wait
+        parameters:
+          - name: id
+            value: $steps.detach.outputs.job
+      - stepId: show
+        workflowId: instance-show
+        parameters:
+          - name: instance
+            value: $steps.find.outputs.id
+    outputs:
+      instance: $steps.show.outputs.instance
+
+  - workflowId: instance-elastic-ip-attach
+    summary: Attach an elastic IP to an instance.
+    x-ezu-args: [instance, elastic-ip]
+    inputs:
+      type: object
+      required: [instance, elastic-ip]
+      properties:
+        instance:
+          type: string
+          description: Instance name or id
+        elastic-ip:
+          type: string
+          description: Elastic IP address or id
+    steps:
+      - stepId: find
+        workflowId: instance-id
+        parameters:
+          - name: instance
+            value: $inputs.instance
+      - stepId: address
+        workflowId: elastic-ip-id
+        parameters:
+          - name: elastic-ip
+            value: $inputs.elastic-ip
+      - stepId: attach
+        operationId: attach-instance-to-elastic-ip
+        parameters:
+          - name: id
+            in: path
+            value: $steps.address.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            instance:
+              id: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: operation-wait
+        parameters:
+          - name: id
+            value: $steps.attach.outputs.job
+      - stepId: show
+        workflowId: instance-show
+        parameters:
+          - name: instance
+            value: $steps.find.outputs.id
+    outputs:
+      instance: $steps.show.outputs.instance
+
+  - workflowId: instance-elastic-ip-detach
+    summary: Detach an elastic IP from an instance.
+    x-ezu-args: [instance, elastic-ip]
+    inputs:
+      type: object
+      required: [instance, elastic-ip]
+      properties:
+        instance:
+          type: string
+          description: Instance name or id
+        elastic-ip:
+          type: string
+          description: Elastic IP address or id
+    steps:
+      - stepId: find
+        workflowId: instance-id
+        parameters:
+          - name: instance
+            value: $inputs.instance
+      - stepId: address
+        workflowId: elastic-ip-id
+        parameters:
+          - name: elastic-ip
+            value: $inputs.elastic-ip
+      - stepId: detach
+        operationId: detach-instance-from-elastic-ip
+        parameters:
+          - name: id
+            in: path
+            value: $steps.address.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            instance:
+              id: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: operation-wait
+        parameters:
+          - name: id
+            value: $steps.detach.outputs.job
+      - stepId: show
+        workflowId: instance-show
+        parameters:
+          - name: instance
+            value: $steps.find.outputs.id
+    outputs:
+      instance: $steps.show.outputs.instance
+
+  # ---- instance snapshots ----
+
+  - workflowId: instance-snapshot-list
+    summary: List instance snapshots.
+    steps:
+      - stepId: list
+        operationId: list-snapshots
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          snapshots: $response.body#/snapshots
+    outputs:
+      snapshots: $steps.list.outputs.snapshots
+
+  - workflowId: instance-snapshot-show
+    summary: Show an instance snapshot.
+    x-ezu-args: [id]
+    inputs:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+          description: Snapshot id
+    steps:
+      - stepId: show
+        operationId: get-snapshot
+        parameters:
+          - name: id
+            in: path
+            value: $inputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          snapshot: $response.body
+    outputs:
+      snapshot: $steps.show.outputs.snapshot
+
+  - workflowId: instance-snapshot-create
+    summary: Snapshot an instance's disk.
+    x-ezu-args: [instance]
+    inputs:
+      type: object
+      required: [instance]
+      properties:
+        instance:
+          type: string
+          description: Instance name or id
+    steps:
+      - stepId: find
+        workflowId: instance-id
+        parameters:
+          - name: instance
+            value: $inputs.instance
+      - stepId: create
+        operationId: create-snapshot
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: operation-wait
+        parameters:
+          - name: id
+            value: $steps.create.outputs.job
+      - stepId: show
+        workflowId: instance-snapshot-show
+        parameters:
+          - name: id
+            value: $steps.done.outputs.reference
+    outputs:
+      snapshot: $steps.show.outputs.snapshot
+
+  - workflowId: instance-snapshot-delete
+    summary: Delete an instance snapshot.
+    x-ezu-args: [id]
+    inputs:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+          description: Snapshot id
+    steps:
+      - stepId: delete
+        operationId: delete-snapshot
+        parameters:
+          - name: id
+            in: path
+            value: $inputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: operation-wait
+        parameters:
+          - name: id
+            value: $steps.delete.outputs.job
+    outputs:
+      deleted: $inputs.id
+
+  - workflowId: instance-snapshot-revert
+    summary: Revert an instance to one of its snapshots; the instance must be stopped.
+    x-ezu-args: [instance, snapshot]
+    inputs:
+      type: object
+      required: [instance, snapshot]
+      properties:
+        instance:
+          type: string
+          description: Instance name or id
+        snapshot:
+          type: string
+          description: Snapshot id
+    steps:
+      - stepId: find
+        workflowId: instance-id
+        parameters:
+          - name: instance
+            value: $inputs.instance
+      - stepId: revert
+        operationId: revert-instance-to-snapshot
+        parameters:
+          - name: instance-id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            id: $inputs.snapshot
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: operation-wait
+        parameters:
+          - name: id
+            value: $steps.revert.outputs.job
+      - stepId: show
+        workflowId: instance-show
+        parameters:
+          - name: instance
+            value: $steps.find.outputs.id
+    outputs:
+      instance: $steps.show.outputs.instance
+
+  - workflowId: instance-snapshot-export
+    summary: Export an instance snapshot, and show where to download it.
+    x-ezu-args: [id]
+    inputs:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+          description: Snapshot id
+    steps:
+      - stepId: export
+        operationId: export-snapshot
+        parameters:
+          - name: id
+            in: path
+            value: $inputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: operation-wait
+        parameters:
+          - name: id
+            value: $steps.export.outputs.job
+      - stepId: show
+        workflowId: instance-snapshot-show
+        parameters:
+          - name: id
+            value: $inputs.id
+    outputs:
+      export: $steps.show.outputs.snapshot#/export
+
+  # ---- instance types ----
+
+  - workflowId: instance-type-list
+    summary: List instance types.
+    steps:
+      - stepId: list
+        operationId: list-instance-types
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          instance-types: $response.body#/instance-types
+    outputs:
+      instance-types: $steps.list.outputs.instance-types
+
+  - workflowId: instance-type-show
+    summary: Show an instance type, given its family and size.
+    x-ezu-args: [size]
+    inputs:
+      type: object
+      required: [size]
+      properties:
+        family:
+          type: string
+          description: Instance type family (standard, cpu, memory…)
+          default: standard
+        size:
+          type: string
+          description: Instance type size (micro, small, medium, large…)
+    steps:
+      - stepId: find
+        operationId: list-instance-types
+        successCriteria:
+          - condition: $statusCode == 200
+          - context: $response.body
+            type: jsonpath
+            condition: "$['instance-types'][?@.family == '{$inputs.family}' && @.size == '{$inputs.size}']"
+        outputs:
+          id:
+            context: $response.body
+            type: jsonpath
+            selector: "$['instance-types'][?@.family == '{$inputs.family}' && @.size == '{$inputs.size}'].id"
+      - stepId: show
+        operationId: get-instance-type
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          instance-type: $response.body
+    outputs:
+      instance-type: $steps.show.outputs.instance-type
+
+  # ---- templates ----
+
+  - workflowId: template-list
+    summary: List templates.
+    inputs:
+      type: object
+      properties:
+        visibility:
+          type: string
+          enum: [public, private]
+          description: Exoscale's templates, or your own
+          default: public
+        family:
+          type: string
+          description: Only templates of this family (ubuntu, debian…)
+    steps:
+      - stepId: list
+        operationId: list-templates
+        parameters:
+          - name: visibility
+            in: query
+            value: $inputs.visibility
+          - name: family
+            in: query
+            value: $inputs.family
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          templates: $response.body#/templates
+    outputs:
+      templates: $steps.list.outputs.templates
+
+  - workflowId: template-show
+    summary: Show a template.
+    x-ezu-args: [template]
+    inputs:
+      type: object
+      required: [template]
+      properties:
+        template:
+          type: string
+          description: Template name or id
+        visibility:
+          type: string
+          enum: [public, private]
+          description: Where to look for the template
+          default: public
+    steps:
+      - stepId: find
+        operationId: list-templates
+        parameters:
+          - name: visibility
+            in: query
+            value: $inputs.visibility
+        successCriteria:
+          - condition: $statusCode == 200
+          - context: $response.body
+            type: jsonpath
+            condition: "$.templates[?@.name == '{$inputs.template}' || @.id == '{$inputs.template}']"
+        outputs:
+          template:
+            context: $response.body
+            type: jsonpath
+            selector: "$.templates[?@.name == '{$inputs.template}' || @.id == '{$inputs.template}']"
+    outputs:
+      template: $steps.find.outputs.template
+
+  - workflowId: template-delete
+    summary: Delete one of your templates.
+    x-ezu-args: [template]
+    inputs:
+      type: object
+      required: [template]
+      properties:
+        template:
+          type: string
+          description: Template name or id
+    steps:
+      - stepId: find
+        operationId: list-templates
+        parameters:
+          - name: visibility
+            in: query
+            value: private
+        successCriteria:
+          - condition: $statusCode == 200
+          - context: $response.body
+            type: jsonpath
+            condition: "$.templates[?@.name == '{$inputs.template}' || @.id == '{$inputs.template}']"
+        outputs:
+          id:
+            context: $response.body
+            type: jsonpath
+            selector: "$.templates[?@.name == '{$inputs.template}' || @.id == '{$inputs.template}'].id"
+      - stepId: delete
+        operationId: delete-template
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: operation-wait
+        parameters:
+          - name: id
+            value: $steps.delete.outputs.job
+    outputs:
+      deleted: $steps.find.outputs.id
+
+  # ---- SSH keys ----
+
+  - workflowId: ssh-key-list
+    summary: List SSH keys.
+    steps:
+      - stepId: list
+        operationId: list-ssh-keys
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          ssh-keys: $response.body#/ssh-keys
+    outputs:
+      ssh-keys: $steps.list.outputs.ssh-keys
+
+  - workflowId: ssh-key-show
+    summary: Show an SSH key.
+    x-ezu-args: [name]
+    inputs:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          description: SSH key name
+    steps:
+      - stepId: show
+        operationId: get-ssh-key
+        parameters:
+          - name: name
+            in: path
+            value: $inputs.name
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          ssh-key: $response.body
+    outputs:
+      ssh-key: $steps.show.outputs.ssh-key
+
+  - workflowId: ssh-key-register
+    summary: Register an SSH public key.
+    x-ezu-args: [name, public-key]
+    inputs:
+      type: object
+      required: [name, public-key]
+      properties:
+        name:
+          type: string
+          description: SSH key name
+        public-key:
+          type: string
+          description: The public key, as in ~/.ssh/id_ed25519.pub
+    steps:
+      - stepId: register
+        operationId: register-ssh-key
+        requestBody:
+          contentType: application/json
+          payload:
+            name: $inputs.name
+            public-key: $inputs.public-key
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: operation-wait
+        parameters:
+          - name: id
+            value: $steps.register.outputs.job
+      - stepId: show
+        workflowId: ssh-key-show
+        parameters:
+          - name: name
+            value: $inputs.name
+    outputs:
+      ssh-key: $steps.show.outputs.ssh-key
+
+  - workflowId: ssh-key-delete
+    summary: Delete an SSH key.
+    x-ezu-args: [name]
+    inputs:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          description: SSH key name
+    steps:
+      - stepId: delete
+        operationId: delete-ssh-key
+        parameters:
+          - name: name
+            in: path
+            value: $inputs.name
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: operation-wait
+        parameters:
+          - name: id
+            value: $steps.delete.outputs.job
+    outputs:
+      deleted: $inputs.name
+
+  # ---- security groups ----
+
+  - workflowId: security-group-id
+    summary: The id of a security group, given its name or id.
+    x-ezu-args: [security-group]
+    inputs:
+      type: object
+      required: [security-group]
+      properties:
+        security-group:
+          type: string
+          description: Security group name or id
+    steps:
+      - stepId: find
+        operationId: list-security-groups
+        successCriteria:
+          - condition: $statusCode == 200
+          - context: $response.body
+            type: jsonpath
+            condition: "$['security-groups'][?@.name == '{$inputs.security-group}' || @.id == '{$inputs.security-group}']"
+        outputs:
+          id:
+            context: $response.body
+            type: jsonpath
+            selector: "$['security-groups'][?@.name == '{$inputs.security-group}' || @.id == '{$inputs.security-group}'].id"
+    outputs:
+      id: $steps.find.outputs.id
+
+  - workflowId: security-group-list
+    summary: List security groups.
+    steps:
+      - stepId: list
+        operationId: list-security-groups
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          security-groups: $response.body#/security-groups
+    outputs:
+      security-groups: $steps.list.outputs.security-groups
+
+  - workflowId: security-group-show
+    summary: Show a security group with its rules.
+    x-ezu-args: [security-group]
+    inputs:
+      type: object
+      required: [security-group]
+      properties:
+        security-group:
+          type: string
+          description: Security group name or id
+    steps:
+      - stepId: find
+        workflowId: security-group-id
+        parameters:
+          - name: security-group
+            value: $inputs.security-group
+      - stepId: show
+        operationId: get-security-group
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          security-group: $response.body
+    outputs:
+      security-group: $steps.show.outputs.security-group
+
+  - workflowId: security-group-create
+    summary: Create a security group.
+    x-ezu-args: [name]
+    inputs:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          description: Security group name
+        description:
+          type: string
+          description: Description
+    steps:
+      - stepId: create
+        operationId: create-security-group
+        requestBody:
+          contentType: application/json
+          payload:
+            name: $inputs.name
+            description: $inputs.description
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: operation-wait
+        parameters:
+          - name: id
+            value: $steps.create.outputs.job
+      - stepId: show
+        workflowId: security-group-show
+        parameters:
+          - name: security-group
+            value: $steps.done.outputs.reference
+    outputs:
+      security-group: $steps.show.outputs.security-group
+
+  - workflowId: security-group-delete
+    summary: Delete a security group.
+    x-ezu-args: [security-group]
+    inputs:
+      type: object
+      required: [security-group]
+      properties:
+        security-group:
+          type: string
+          description: Security group name or id
+    steps:
+      - stepId: find
+        workflowId: security-group-id
+        parameters:
+          - name: security-group
+            value: $inputs.security-group
+      - stepId: delete
+        operationId: delete-security-group
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: operation-wait
+        parameters:
+          - name: id
+            value: $steps.delete.outputs.job
+    outputs:
+      deleted: $steps.find.outputs.id
+
+  - workflowId: security-group-rule-add
+    summary: Add a rule to a security group, from a network or another group.
+    x-ezu-args: [security-group]
+    inputs:
+      type: object
+      required: [security-group]
+      properties:
+        security-group:
+          type: string
+          description: Security group name or id
+        flow:
+          type: string
+          enum: [ingress, egress]
+          description: Direction of the traffic the rule allows
+          default: ingress
+        protocol:
+          type: string
+          enum: [tcp, udp, icmp, icmpv6, ah, esp, gre, ipip]
+          description: Network protocol
+          default: tcp
+        port:
+          type: integer
+          description: Port, or first port of a range, for tcp and udp
+        end-port:
+          type: integer
+          description: Last port of a range; port alone by default
+        network:
+          type: string
+          description: Network the traffic comes from or goes to (CIDR)
+        source-group:
+          type: string
+          description: Name of the security group the traffic comes from or goes to
+        description:
+          type: string
+          description: Description
+    steps:
+      - stepId: find
+        workflowId: security-group-id
+        parameters:
+          - name: security-group
+            value: $inputs.security-group
+        onSuccess:
+          - name: range
+            type: goto
+            stepId: add-range
+            criteria:
+              - condition: $inputs.end-port != null
+      - stepId: add
+        operationId: add-rule-to-security-group
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            flow-direction: $inputs.flow
+            protocol: $inputs.protocol
+            start-port: $inputs.port
+            end-port: $inputs.port
+            network: $inputs.network
+            security-group:
+              name: $inputs.source-group
+            description: $inputs.description
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: operation-wait
+        parameters:
+          - name: id
+            value: $steps.add.outputs.job
+        onSuccess:
+          - name: added
+            type: goto
+            stepId: show
+      - stepId: add-range
+        operationId: add-rule-to-security-group
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            flow-direction: $inputs.flow
+            protocol: $inputs.protocol
+            start-port: $inputs.port
+            end-port: $inputs.end-port
+            network: $inputs.network
+            security-group:
+              name: $inputs.source-group
+            description: $inputs.description
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done-range
+        workflowId: operation-wait
+        parameters:
+          - name: id
+            value: $steps.add-range.outputs.job
+      - stepId: show
+        workflowId: security-group-show
+        parameters:
+          - name: security-group
+            value: $steps.find.outputs.id
+    outputs:
+      security-group: $steps.show.outputs.security-group
+
+  - workflowId: security-group-rule-delete
+    summary: Delete a rule of a security group.
+    x-ezu-args: [security-group, rule]
+    inputs:
+      type: object
+      required: [security-group, rule]
+      properties:
+        security-group:
+          type: string
+          description: Security group name or id
+        rule:
+          type: string
+          description: Rule id, as security-group-show lists them
+    steps:
+      - stepId: find
+        workflowId: security-group-id
+        parameters:
+          - name: security-group
+            value: $inputs.security-group
+      - stepId: delete
+        operationId: delete-rule-from-security-group
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+          - name: rule-id
+            in: path
+            value: $inputs.rule
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: operation-wait
+        parameters:
+          - name: id
+            value: $steps.delete.outputs.job
+      - stepId: show
+        workflowId: security-group-show
+        parameters:
+          - name: security-group
+            value: $steps.find.outputs.id
+    outputs:
+      security-group: $steps.show.outputs.security-group
+
+  - workflowId: security-group-source-add
+    summary: Add an external source (a CIDR) to a security group.
+    x-ezu-args: [security-group, cidr]
+    inputs:
+      type: object
+      required: [security-group, cidr]
+      properties:
+        security-group:
+          type: string
+          description: Security group name or id
+        cidr:
+          type: string
+          description: Network, as 192.0.2.0/24
+    steps:
+      - stepId: find
+        workflowId: security-group-id
+        parameters:
+          - name: security-group
+            value: $inputs.security-group
+      - stepId: add
+        operationId: add-external-source-to-security-group
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            cidr: $inputs.cidr
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: operation-wait
+        parameters:
+          - name: id
+            value: $steps.add.outputs.job
+      - stepId: show
+        workflowId: security-group-show
+        parameters:
+          - name: security-group
+            value: $steps.find.outputs.id
+    outputs:
+      security-group: $steps.show.outputs.security-group
+
+  - workflowId: security-group-source-remove
+    summary: Remove an external source (a CIDR) from a security group.
+    x-ezu-args: [security-group, cidr]
+    inputs:
+      type: object
+      required: [security-group, cidr]
+      properties:
+        security-group:
+          type: string
+          description: Security group name or id
+        cidr:
+          type: string
+          description: Network, as 192.0.2.0/24
+    steps:
+      - stepId: find
+        workflowId: security-group-id
+        parameters:
+          - name: security-group
+            value: $inputs.security-group
+      - stepId: remove
+        operationId: remove-external-source-from-security-group
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            cidr: $inputs.cidr
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: operation-wait
+        parameters:
+          - name: id
+            value: $steps.remove.outputs.job
+      - stepId: show
+        workflowId: security-group-show
+        parameters:
+          - name: security-group
+            value: $steps.find.outputs.id
+    outputs:
+      security-group: $steps.show.outputs.security-group
+
+  # ---- elastic IPs ----
+
+  - workflowId: elastic-ip-id
+    summary: The id of an elastic IP, given its address or id.
+    x-ezu-args: [elastic-ip]
+    inputs:
+      type: object
+      required: [elastic-ip]
+      properties:
+        elastic-ip:
+          type: string
+          description: Elastic IP address or id
+    steps:
+      - stepId: find
+        operationId: list-elastic-ips
+        successCriteria:
+          - condition: $statusCode == 200
+          - context: $response.body
+            type: jsonpath
+            condition: "$['elastic-ips'][?@.ip == '{$inputs.elastic-ip}' || @.id == '{$inputs.elastic-ip}']"
+        outputs:
+          id:
+            context: $response.body
+            type: jsonpath
+            selector: "$['elastic-ips'][?@.ip == '{$inputs.elastic-ip}' || @.id == '{$inputs.elastic-ip}'].id"
+    outputs:
+      id: $steps.find.outputs.id
+
+  - workflowId: elastic-ip-list
+    summary: List elastic IPs.
+    steps:
+      - stepId: list
+        operationId: list-elastic-ips
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          elastic-ips: $response.body#/elastic-ips
+    outputs:
+      elastic-ips: $steps.list.outputs.elastic-ips
+
+  - workflowId: elastic-ip-show
+    summary: Show an elastic IP.
+    x-ezu-args: [elastic-ip]
+    inputs:
+      type: object
+      required: [elastic-ip]
+      properties:
+        elastic-ip:
+          type: string
+          description: Elastic IP address or id
+    steps:
+      - stepId: find
+        workflowId: elastic-ip-id
+        parameters:
+          - name: elastic-ip
+            value: $inputs.elastic-ip
+      - stepId: show
+        operationId: get-elastic-ip
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          elastic-ip: $response.body
+    outputs:
+      elastic-ip: $steps.show.outputs.elastic-ip
+
+  - workflowId: elastic-ip-create
+    summary: Create an elastic IP.
+    inputs:
+      type: object
+      properties:
+        description:
+          type: string
+          description: Description
+        address-family:
+          type: string
+          enum: [inet4, inet6]
+          description: IPv4 or IPv6
+          default: inet4
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+          description: Labels, as labels.KEY=VALUE
+    steps:
+      - stepId: create
+        operationId: create-elastic-ip
+        requestBody:
+          contentType: application/json
+          payload:
+            description: $inputs.description
+            addressfamily: $inputs.address-family
+            labels: $inputs.labels
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: operation-wait
+        parameters:
+          - name: id
+            value: $steps.create.outputs.job
+      - stepId: show
+        workflowId: elastic-ip-show
+        parameters:
+          - name: elastic-ip
+            value: $steps.done.outputs.reference
+    outputs:
+      elastic-ip: $steps.show.outputs.elastic-ip
+
+  - workflowId: elastic-ip-delete
+    summary: Delete an elastic IP.
+    x-ezu-args: [elastic-ip]
+    inputs:
+      type: object
+      required: [elastic-ip]
+      properties:
+        elastic-ip:
+          type: string
+          description: Elastic IP address or id
+    steps:
+      - stepId: find
+        workflowId: elastic-ip-id
+        parameters:
+          - name: elastic-ip
+            value: $inputs.elastic-ip
+      - stepId: delete
+        operationId: delete-elastic-ip
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: operation-wait
+        parameters:
+          - name: id
+            value: $steps.delete.outputs.job
+    outputs:
+      deleted: $steps.find.outputs.id
+
+  # ---- private networks ----
+
+  - workflowId: private-network-id
+    summary: The id of a private network, given its name or id.
+    x-ezu-args: [private-network]
+    inputs:
+      type: object
+      required: [private-network]
+      properties:
+        private-network:
+          type: string
+          description: Private network name or id
+    steps:
+      - stepId: find
+        operationId: list-private-networks
+        successCriteria:
+          - condition: $statusCode == 200
+          - context: $response.body
+            type: jsonpath
+            condition: "$['private-networks'][?@.name == '{$inputs.private-network}' || @.id == '{$inputs.private-network}']"
+        outputs:
+          id:
+            context: $response.body
+            type: jsonpath
+            selector: "$['private-networks'][?@.name == '{$inputs.private-network}' || @.id == '{$inputs.private-network}'].id"
+    outputs:
+      id: $steps.find.outputs.id
+
+  - workflowId: private-network-list
+    summary: List private networks.
+    steps:
+      - stepId: list
+        operationId: list-private-networks
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          private-networks: $response.body#/private-networks
+    outputs:
+      private-networks: $steps.list.outputs.private-networks
+
+  - workflowId: private-network-show
+    summary: Show a private network and its leases.
+    x-ezu-args: [private-network]
+    inputs:
+      type: object
+      required: [private-network]
+      properties:
+        private-network:
+          type: string
+          description: Private network name or id
+    steps:
+      - stepId: find
+        workflowId: private-network-id
+        parameters:
+          - name: private-network
+            value: $inputs.private-network
+      - stepId: show
+        operationId: get-private-network
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          private-network: $response.body
+    outputs:
+      private-network: $steps.show.outputs.private-network
+
+  - workflowId: private-network-create
+    summary: Create a private network, managed when given a range of addresses.
+    x-ezu-args: [name]
+    inputs:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          description: Private network name
+        description:
+          type: string
+          description: Description
+        start-ip:
+          type: string
+          description: First address of a managed network's range
+        end-ip:
+          type: string
+          description: Last address of a managed network's range
+        netmask:
+          type: string
+          description: Netmask of a managed network
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+          description: Labels, as labels.KEY=VALUE
+    steps:
+      - stepId: create
+        operationId: create-private-network
+        requestBody:
+          contentType: application/json
+          payload:
+            name: $inputs.name
+            description: $inputs.description
+            start-ip: $inputs.start-ip
+            end-ip: $inputs.end-ip
+            netmask: $inputs.netmask
+            labels: $inputs.labels
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: operation-wait
+        parameters:
+          - name: id
+            value: $steps.create.outputs.job
+      - stepId: show
+        workflowId: private-network-show
+        parameters:
+          - name: private-network
+            value: $steps.done.outputs.reference
+    outputs:
+      private-network: $steps.show.outputs.private-network
+
+  - workflowId: private-network-delete
+    summary: Delete a private network.
+    x-ezu-args: [private-network]
+    inputs:
+      type: object
+      required: [private-network]
+      properties:
+        private-network:
+          type: string
+          description: Private network name or id
+    steps:
+      - stepId: find
+        workflowId: private-network-id
+        parameters:
+          - name: private-network
+            value: $inputs.private-network
+      - stepId: delete
+        operationId: delete-private-network
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: operation-wait
+        parameters:
+          - name: id
+            value: $steps.delete.outputs.job
+    outputs:
+      deleted: $steps.find.outputs.id
+
+  # ---- anti-affinity groups ----
+
+  - workflowId: anti-affinity-group-id
+    summary: The id of an anti-affinity group, given its name or id.
+    x-ezu-args: [anti-affinity-group]
+    inputs:
+      type: object
+      required: [anti-affinity-group]
+      properties:
+        anti-affinity-group:
+          type: string
+          description: Anti-affinity group name or id
+    steps:
+      - stepId: find
+        operationId: list-anti-affinity-groups
+        successCriteria:
+          - condition: $statusCode == 200
+          - context: $response.body
+            type: jsonpath
+            condition: "$['anti-affinity-groups'][?@.name == '{$inputs.anti-affinity-group}' || @.id == '{$inputs.anti-affinity-group}']"
+        outputs:
+          id:
+            context: $response.body
+            type: jsonpath
+            selector: "$['anti-affinity-groups'][?@.name == '{$inputs.anti-affinity-group}' || @.id == '{$inputs.anti-affinity-group}'].id"
+    outputs:
+      id: $steps.find.outputs.id
+
+  - workflowId: anti-affinity-group-list
+    summary: List anti-affinity groups.
+    steps:
+      - stepId: list
+        operationId: list-anti-affinity-groups
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          anti-affinity-groups: $response.body#/anti-affinity-groups
+    outputs:
+      anti-affinity-groups: $steps.list.outputs.anti-affinity-groups
+
+  - workflowId: anti-affinity-group-show
+    summary: Show an anti-affinity group and its instances.
+    x-ezu-args: [anti-affinity-group]
+    inputs:
+      type: object
+      required: [anti-affinity-group]
+      properties:
+        anti-affinity-group:
+          type: string
+          description: Anti-affinity group name or id
+    steps:
+      - stepId: find
+        workflowId: anti-affinity-group-id
+        parameters:
+          - name: anti-affinity-group
+            value: $inputs.anti-affinity-group
+      - stepId: show
+        operationId: get-anti-affinity-group
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          anti-affinity-group: $response.body
+    outputs:
+      anti-affinity-group: $steps.show.outputs.anti-affinity-group
+
+  - workflowId: anti-affinity-group-create
+    summary: Create an anti-affinity group.
+    x-ezu-args: [name]
+    inputs:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          description: Anti-affinity group name
+        description:
+          type: string
+          description: Description
+    steps:
+      - stepId: create
+        operationId: create-anti-affinity-group
+        requestBody:
+          contentType: application/json
+          payload:
+            name: $inputs.name
+            description: $inputs.description
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: operation-wait
+        parameters:
+          - name: id
+            value: $steps.create.outputs.job
+      - stepId: show
+        workflowId: anti-affinity-group-show
+        parameters:
+          - name: anti-affinity-group
+            value: $steps.done.outputs.reference
+    outputs:
+      anti-affinity-group: $steps.show.outputs.anti-affinity-group
+
+  - workflowId: anti-affinity-group-delete
+    summary: Delete an anti-affinity group.
+    x-ezu-args: [anti-affinity-group]
+    inputs:
+      type: object
+      required: [anti-affinity-group]
+      properties:
+        anti-affinity-group:
+          type: string
+          description: Anti-affinity group name or id
+    steps:
+      - stepId: find
+        workflowId: anti-affinity-group-id
+        parameters:
+          - name: anti-affinity-group
+            value: $inputs.anti-affinity-group
+      - stepId: delete
+        operationId: delete-anti-affinity-group
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: operation-wait
+        parameters:
+          - name: id
+            value: $steps.delete.outputs.job
+    outputs:
+      deleted: $steps.find.outputs.id
+
+  # ---- deploy targets ----
+
+  - workflowId: deploy-target-list
+    summary: List deploy targets.
+    steps:
+      - stepId: list
+        operationId: list-deploy-targets
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          deploy-targets: $response.body#/deploy-targets
+    outputs:
+      deploy-targets: $steps.list.outputs.deploy-targets
+
+  - workflowId: deploy-target-show
+    summary: Show a deploy target.
+    x-ezu-args: [deploy-target]
+    inputs:
+      type: object
+      required: [deploy-target]
+      properties:
+        deploy-target:
+          type: string
+          description: Deploy target name or id
+    steps:
+      - stepId: find
+        operationId: list-deploy-targets
+        successCriteria:
+          - condition: $statusCode == 200
+          - context: $response.body
+            type: jsonpath
+            condition: "$['deploy-targets'][?@.name == '{$inputs.deploy-target}' || @.id == '{$inputs.deploy-target}']"
+        outputs:
+          deploy-target:
+            context: $response.body
+            type: jsonpath
+            selector: "$['deploy-targets'][?@.name == '{$inputs.deploy-target}' || @.id == '{$inputs.deploy-target}']"
+    outputs:
+      deploy-target: $steps.find.outputs.deploy-target
+
+  # ---- block storage ----
+
+  - workflowId: block-storage-id
+    summary: The id of a block storage volume, given its name or id.
+    x-ezu-args: [volume]
+    inputs:
+      type: object
+      required: [volume]
+      properties:
+        volume:
+          type: string
+          description: Volume name or id
+    steps:
+      - stepId: find
+        operationId: list-block-storage-volumes
+        successCriteria:
+          - condition: $statusCode == 200
+          - context: $response.body
+            type: jsonpath
+            condition: "$['block-storage-volumes'][?@.name == '{$inputs.volume}' || @.id == '{$inputs.volume}']"
+        outputs:
+          id:
+            context: $response.body
+            type: jsonpath
+            selector: "$['block-storage-volumes'][?@.name == '{$inputs.volume}' || @.id == '{$inputs.volume}'].id"
+    outputs:
+      id: $steps.find.outputs.id
+
+  - workflowId: block-storage-list
+    summary: List block storage volumes.
+    steps:
+      - stepId: list
+        operationId: list-block-storage-volumes
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          volumes: $response.body#/block-storage-volumes
+    outputs:
+      volumes: $steps.list.outputs.volumes
+
+  - workflowId: block-storage-show
+    summary: Show a block storage volume.
+    x-ezu-args: [volume]
+    inputs:
+      type: object
+      required: [volume]
+      properties:
+        volume:
+          type: string
+          description: Volume name or id
+    steps:
+      - stepId: find
+        workflowId: block-storage-id
+        parameters:
+          - name: volume
+            value: $inputs.volume
+      - stepId: show
+        operationId: get-block-storage-volume
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          volume: $response.body
+    outputs:
+      volume: $steps.show.outputs.volume
+
+  - workflowId: block-storage-create
+    summary: Create a block storage volume.
+    x-ezu-args: [name]
+    inputs:
+      type: object
+      required: [name, size]
+      properties:
+        name:
+          type: string
+          description: Volume name
+        size:
+          type: integer
+          description: Size in GiB
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+          description: Labels, as labels.KEY=VALUE
+    steps:
+      - stepId: create
+        operationId: create-block-storage-volume
+        requestBody:
+          contentType: application/json
+          payload:
+            name: $inputs.name
+            size: $inputs.size
+            labels: $inputs.labels
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: operation-wait
+        parameters:
+          - name: id
+            value: $steps.create.outputs.job
+      - stepId: show
+        workflowId: block-storage-show
+        parameters:
+          - name: volume
+            value: $steps.done.outputs.reference
+    outputs:
+      volume: $steps.show.outputs.volume
+
+  - workflowId: block-storage-delete
+    summary: Delete a block storage volume.
+    x-ezu-args: [volume]
+    inputs:
+      type: object
+      required: [volume]
+      properties:
+        volume:
+          type: string
+          description: Volume name or id
+    steps:
+      - stepId: find
+        workflowId: block-storage-id
+        parameters:
+          - name: volume
+            value: $inputs.volume
+      - stepId: delete
+        operationId: delete-block-storage-volume
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: operation-wait
+        parameters:
+          - name: id
+            value: $steps.delete.outputs.job
+    outputs:
+      deleted: $steps.find.outputs.id
+
+  - workflowId: block-storage-attach
+    summary: Attach a block storage volume to an instance.
+    x-ezu-args: [volume, instance]
+    inputs:
+      type: object
+      required: [volume, instance]
+      properties:
+        volume:
+          type: string
+          description: Volume name or id
+        instance:
+          type: string
+          description: Instance name or id
+    steps:
+      - stepId: find
+        workflowId: block-storage-id
+        parameters:
+          - name: volume
+            value: $inputs.volume
+      - stepId: instance
+        workflowId: instance-id
+        parameters:
+          - name: instance
+            value: $inputs.instance
+      - stepId: attach
+        operationId: attach-block-storage-volume-to-instance
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            instance:
+              id: $steps.instance.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: operation-wait
+        parameters:
+          - name: id
+            value: $steps.attach.outputs.job
+      - stepId: show
+        workflowId: block-storage-show
+        parameters:
+          - name: volume
+            value: $steps.find.outputs.id
+    outputs:
+      volume: $steps.show.outputs.volume
+
+  - workflowId: block-storage-detach
+    summary: Detach a block storage volume from its instance.
+    x-ezu-args: [volume]
+    inputs:
+      type: object
+      required: [volume]
+      properties:
+        volume:
+          type: string
+          description: Volume name or id
+    steps:
+      - stepId: find
+        workflowId: block-storage-id
+        parameters:
+          - name: volume
+            value: $inputs.volume
+      - stepId: detach
+        operationId: detach-block-storage-volume
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: operation-wait
+        parameters:
+          - name: id
+            value: $steps.detach.outputs.job
+      - stepId: show
+        workflowId: block-storage-show
+        parameters:
+          - name: volume
+            value: $steps.find.outputs.id
+    outputs:
+      volume: $steps.show.outputs.volume

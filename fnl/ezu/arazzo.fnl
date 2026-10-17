@@ -355,8 +355,12 @@ target; a :value on the reference overrides the target parameter's value."
 
 (fn failure-message [step-id outcome failure]
   "Why step-id failed: its error, or the criterion that failed with the
-response's status and body."
-  (if outcome.error
+response's status and body. A failed sub-workflow's reason follows the step
+and the workflow it ran: step 'find' (lookup) › step 'list' failed: …"
+  (if (and outcome.error outcome.workflow)
+      (.. "step '" step-id "' (" outcome.workflow ") › "
+          (tostring outcome.error))
+      outcome.error
       (.. "step '" step-id "' failed: " (tostring outcome.error))
       (let [resp outcome.response
             b (?. resp :body)
@@ -410,7 +414,8 @@ already on the stack means a cycle (dependsOn or a step calling itself)."
   (or step.operationId step.operationPath step.workflowId))
 
 (fn run-step [run step]
-  "Run one step; returns {:ok bool :response resp :error message}."
+  "Run one step; returns {:ok bool :response resp :error message}, and
+:workflow, the workflow a failed sub-workflow step ran."
   (tset run.attempts step.stepId (+ 1 (or (. run.attempts step.stepId) 0)))
   (if step.workflowId
       ;; sub-workflow step: its outputs become the step's outputs
@@ -433,7 +438,7 @@ already on the stack means a cycle (dependsOn or a step calling itself)."
                :outputs (if ok sub.outputs {})
                :request nil
                :response nil})
-        (if ok {:ok true} {:ok false :error sub}))
+        (if ok {:ok true} {:ok false :error sub :workflow step.workflowId}))
       ;; operation step: merge workflow params then step params
       (let [step-params (expand-references run.doc step.parameters)
             _ (each [_ p (ipairs step-params)]

@@ -513,8 +513,8 @@ it isn't UTF-8)."
 
 (fn explain-criterion [ctx criterion]
   "Why criterion doesn't pass, for a person: a simple condition with the values
-of its runtime expressions, a regex or JSONPath condition with its context's
-value, or why it can't be evaluated."
+of its runtime expressions, a regex or JSONPath condition as evaluated with
+its context's value, or why it can't be evaluated."
   (let [(_ problem) (eval-criterion ctx criterion)
         kind (expression-type (or criterion.type :simple))]
     (if problem problem (= kind :simple)
@@ -527,8 +527,11 @@ value, or why it can't be evaluated."
           (if (next parts)
               (.. criterion.condition " (" (table.concat parts ", ") ")")
               criterion.condition))
-        (.. kind " " criterion.condition " on " (tostring criterion.context)
-            " (" (brief (eval ctx criterion.context)) ")"))))
+        ;; the condition as evaluated: embedded {$expressions} substituted
+        (.. kind " " (eval-template ctx criterion.condition)
+            (if (= kind :regex) " doesn't match " " selects nothing in ")
+            (tostring criterion.context) " ("
+            (brief (eval ctx criterion.context)) ")"))))
 
 {: eval
  : expression-type

@@ -82,8 +82,9 @@ does, which a streaming transport hands over one by one."
     (assert ok result)
     result))
 
-(fn ezu-run [args ?routes]
-  "Run the CLI in-process; returns {:code :out :err :requests}."
+(fn ezu-run [args ?routes ?program]
+  "Run the CLI in-process, as ?program (default ezu); returns {:code :out :err
+:requests}."
   (let [(transport requests) (routes-transport (or ?routes {}))
         out []
         err []
@@ -104,7 +105,10 @@ does, which a streaming transport hands over one by one."
                                    (table.insert written s)
                                    self)))
                     :flush #true})
-    (let [(ok code) (pcall cli.run args {: transport :config current-config})]
+    (let [(ok code) (pcall cli.run args
+                           {: transport
+                            :config current-config
+                            :program (or ?program "/usr/local/bin/ezu")})]
       (set _G.print real-print)
       (set io.stderr real-stderr)
       (set io.stdout real-stdout)
@@ -1781,6 +1785,50 @@ does, which a streaming transport hands over one by one."
                         {"GET https://api.test/pets/7" resp}))]
       (os.remove file)
       r)))
+
+(describe "running as a workflow document's name"
+          (fn []
+            (it "runs its workflows as ezu az NAME does"
+                (fn []
+                  (let [r (ezu-run ["fetchPet" "id=7" "--output=yaml"]
+                                   {"GET https://api.test/pets/7" (respond 200
+                                                                           {:name "Rex"})}
+                                   "/home/me/.local/bin/flows")]
+                    (assert.are.equal 0 r.code r.err)
+                    (assert.are.equal "name: Rex" r.out))
+                  (let [r (ezu-run [] nil "flows")]
+                    (assert.are.equal "fetchPet" r.out))))
+            (it "is plain ezu under its own name, or a name nothing is configured for"
+                (fn []
+                  (each [_ program (ipairs ["/usr/bin/ezu"
+                                            "./bin/ezu-bin"
+                                            "/usr/bin/other"])]
+                    (let [r (ezu-run ["--version"] nil program)]
+                      (assert.are.equal 0 r.code)
+                      (assert.is_truthy (r.out:find "^ezu ") program)))))
+            (it "completes under its own name"
+                (fn []
+                  (let [script (ezu-run ["completion" "fish"] nil "flows")
+                        cands (ezu-run ["__complete" "flows fet"] nil "flows")]
+                    (assert.is_truthy (script.out:find "complete -c flows" 1
+                                                       true)
+                                      script.out)
+                    (assert.is_truthy (script.out:find "(flows __complete" 1
+                                                       true))
+                    (assert.is_nil (script.out:find "ezu" 1 true))
+                    (assert.are.equal "fetchPet" cands.out))))
+            (it "tells how to make the command with --link"
+                (fn []
+                  (let [r (ezu-run ["az" "flows" "--link"])]
+                    (assert.are.equal 0 r.code)
+                    (assert.are.equal "ln -s \"$(command -v ezu)\" ~/.local/bin/flows"
+                                      r.out))
+                  (let [r (ezu-run ["az"
+                                    "test/fixtures/cli-flow.arazzo.json"
+                                    "--link"])]
+                    (assert.are.equal 1 r.code)
+                    (assert.is_truthy (r.err:find "--link needs a document named in the configuration"
+                                                  1 true)))))))
 
 (describe "--check-response"
           (fn []

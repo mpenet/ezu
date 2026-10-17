@@ -285,11 +285,21 @@ being typed (name=…)."
   (icollect [_ e (ipairs (complete-entries line ctx))]
     e.value))
 
-(fn completion-fish []
+(fn named-printer [?command]
+  "print, with ezu's name replaced by ?command: the completion of a link to
+ezu named after a workflow document calls it by that name."
+  (fn [line]
+    (print (if ?command
+               (pick-values 1 (line:gsub "%f[%w_]ezu%f[^%w_]" ?command))
+               line))))
+
+(fn completion-fish [?command]
+  (local print (named-printer ?command))
   (print "# ezu fish completion — source this or put in ~/.config/fish/completions/ezu.fish")
   (print "complete -c ezu -f -a '(ezu __complete --describe (commandline -cp))'"))
 
-(fn completion-bash []
+(fn completion-bash [?command]
+  (local print (named-printer ?command))
   (print "# ezu bash completion — add to ~/.bashrc: eval \"$(ezu completion bash)\"")
   (print "_ezu_complete() {")
   (print "  local line=\"${COMP_LINE:0:COMP_POINT}\"")
@@ -325,7 +335,8 @@ being typed (name=…)."
   (print "}")
   (print "complete -o nospace -F _ezu_complete ezu"))
 
-(fn completion-zsh []
+(fn completion-zsh [?command]
+  (local print (named-printer ?command))
   (print "#compdef ezu")
   (print "# ezu zsh completion — add to fpath or source directly")
   (print "_ezu() {")
@@ -361,15 +372,17 @@ variable assignments (FOO=1 ezu op ...)."
     (set assignment (rest:match "^%s*[%a_][%w_]*=%S*%s+()")))
   (rest:match "^%s*%S+%s+(.*)$"))
 
-(fn run-complete [args]
+(fn run-complete [args ?config]
   "Hidden backend for the shell completion scripts:
-ezu __complete [--describe] LINE-UP-TO-CURSOR"
+ezu __complete [--describe] LINE-UP-TO-CURSOR. ?config: the configuration,
+else the one on disk."
   (let [;; a fetch must not keep Tab waiting long
         timeout 5
         describe? (= (. args 2) "--describe")
         line (command-args (or (. args (if describe? 3 2)) ""))
-        ctx {:config (let [(ok cfg) (pcall #(check-config (load-config)))]
-                       (if ok cfg {}))
+        ctx {:config (or ?config
+                         (let [(ok cfg) (pcall #(check-config (load-config)))]
+                           (if ok cfg {})))
              ;; the cache as op uses it
              :load-schema (fn [src ?profile]
                             (if (src:match "^https?://")

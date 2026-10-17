@@ -101,6 +101,20 @@ On a terminal, a step's line is updated in place while it runs and while it poll
 
 A failed workflow ends with `✗ workflow NAME failed` and the reason: the step, the criterion that failed with the values it compared, and the response's status and body (shortened). ezu exits 1. `-v` shows progress as well and logs every request, credentials redacted. Outputs use the `--output` format.
 
+## A document as its own command
+
+A document named in the configuration can become a command of its own: a link to ezu named after it runs its workflows, as `ezu az NAME` does.
+
+```console
+$ ezu az vm --link
+ln -s "$(command -v ezu)" ~/.local/bin/vm
+$ ln -s "$(command -v ezu)" ~/.local/bin/vm
+$ vm create-instance name=web1 size=medium --profile exo-pp -v
+$ vm get-instance 0b6f3c2e
+```
+
+ezu prints the command rather than running it: the name is yours to choose, and so is where the link goes. `vm completion fish` (or `bash`, `zsh`) gives the completion of the new command; `vm --help` lists its workflows. Under its own name, or a name nothing is configured for, ezu is itself.
+
 ## Checking a document
 
 `--check` reads the document and its OpenAPI sources and reports what would go wrong, without sending a request to the API:

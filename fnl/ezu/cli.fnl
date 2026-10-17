@@ -430,6 +430,15 @@ context's."
     (usage-with-choices "Usage: ezu az <name-or-file> <workflow-id> [name=value ...]"
                         "Configured Arazzo contexts" (or env.config.arazzo {})
                         #(or $.file "")))
+  (when p.link
+    (if (and (?. env.config :arazzo p.schema) (p.schema:match "^[%w_.-]+$"))
+        (do
+          (print (.. "ln -s \"$(command -v ezu)\" ~/.local/bin/" p.schema))
+          (io.stderr:write (.. "then " p.schema
+                               " WORKFLOW … runs its workflows; " p.schema
+                               " completion fish|bash|zsh gives their completion\n"))
+          (exit 0))
+        (die "--link needs a document named in the configuration's arazzo section: that name is the command's")))
   (let [{: named : doc &as context} (arazzo-context p.schema p.profile p env)
         wf (when p.operation (arazzo.find-workflow doc p.operation))]
     (if (and p.operation (not wf)) (die (.. "Unknown workflow: " p.operation))
@@ -983,7 +992,7 @@ p.arazzo, run with the context's profile, else the profile ezu mcp names."
 
 (fn dispatch [args env]
   (if (= (. args 1) "__complete")
-      (run-complete args)
+      (run-complete args env.config)
       (= (. args 1) "--version")
       (print (.. "ezu " ezu.version " (" ((. (require :ezu.curl) :version)) ")"))
       (= (. args 1) "--licenses")
@@ -998,9 +1007,9 @@ p.arazzo, run with the context's profile, else the profile ezu mcp names."
         (match p.cmd
           nil (usage)
           :completion (match p.schema
-                        :fish (completion-fish)
-                        :bash (completion-bash)
-                        :zsh (completion-zsh)
+                        :fish (completion-fish env.command)
+                        :bash (completion-bash env.command)
+                        :zsh (completion-zsh env.command)
                         _ (die "Usage: ezu completion <fish|bash|zsh>"))
           (where (or :profile :auth :http) p.help) (usage)
           :profile (run-profile p.schema p.operation p env)
@@ -1012,11 +1021,35 @@ p.arazzo, run with the context's profile, else the profile ezu mcp names."
           _ (die (.. "Unknown command: " (tostring p.cmd)
                      "\nUsage: ezu <op|az|http|mcp|profile|auth|completion> ..."))))))
 
+(fn program-command [program config]
+  "The workflow document ezu runs as when started under its name (through a
+link named after it in the configuration's arazzo section), or nil: under its
+own name, or any other, ezu is itself."
+  (let [name (when (= (type program) :string)
+               (program:match "([^/]+)$"))]
+    (when (and name (not (name:match "^ezu")) (?. config :arazzo name))
+      name)))
+
+(fn command-arguments [name args]
+  "args of ezu run as name: name's workflows, as ezu az name runs them, and
+its completion under that name."
+  (match (. args 1)
+    :completion args
+    :__complete (let [at (if (= (. args 2) "--describe") 3 2)]
+                  (doto (icollect [_ a (ipairs args)] a)
+                    (tset at
+                          (pick-values 1
+                                       (: (or (. args at) "") :gsub "^%s*%S+"
+                                          (.. "ezu az " name) 1)))))
+    _ (doto ["az" name]
+        (#(each [_ a (ipairs args)]
+            (table.insert $ a))))))
+
 (fn run [args ?env]
   "Run ezu with args and return the exit code.
-?env: {:transport http-fn :config table :config-path string :schema-cache bool}
-replaces the network, the config contents, where the config is written, and
-the schema cache."
+?env: {:transport http-fn :config table :config-path string :schema-cache bool
+:program path} replaces the network, the config contents, where the config is
+written, and the schema cache; program is the name ezu runs under."
   (let [env (or ?env {})
         (config-ok config) (pcall #(check-config (if env.config env.config
                                                      (load-config))))]
@@ -1024,9 +1057,13 @@ the schema cache."
         (do
           (io.stderr:write (.. (tostring config) "\n"))
           1)
-        (let [(ok result) (pcall dispatch args
+        (let [command (program-command env.program config)
+              (ok result) (pcall dispatch
+                                 (if command (command-arguments command args)
+                                     args)
                                  (doto (collect [k v (pairs env)] k v)
                                    (tset :config config)
+                                   (tset :command command)
                                    (tset :config-path
                                          (or env.config-path (config-path)))))]
           (if ok
@@ -1039,6 +1076,6 @@ the schema cache."
                 code))))))
 
 (fn main [args]
-  (os.exit (run args)))
+  (os.exit (run args {:program (. args 0)})))
 
 {: main : run}

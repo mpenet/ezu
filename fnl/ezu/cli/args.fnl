@@ -216,6 +216,10 @@
          :choices [:final :steps :progress :full]
          :scope :az
          :help "final (default), steps, progress, full"}
+        {:names ["--link"]
+         :key :link
+         :scope :az
+         :help "Print how to run a named document's workflows as their own command"}
         {:names ["--check"]
          :key :check
          :scope :az

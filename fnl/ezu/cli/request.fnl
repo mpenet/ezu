@@ -49,18 +49,29 @@ multipart operations take JSON or YAML; any other type is sent as-is."
   (tset cur (. keys (length keys)) v))
 
 (fn build-body [fields ?schema ?base]
-  "Apply [KEY.PATH VAL] fields onto ?base, coercing each value by ?schema."
+  "Apply [KEY.PATH VAL] fields onto ?base, coercing each value by ?schema. A
+field whose schema is an array adds an item, typed by its items schema, to a
+list the fields start (a value written as a JSON array is the whole list)."
   (assert (or (= ?base nil)
               (and (= (type ?base) :table) (not= ?base json.null)
                    (not (json.array? ?base))))
           "--body.KEY=VAL fields require --body to be a JSON object")
-  (let [body (or ?base {})]
+  (let [body (or ?base {})
+        ;; the lists fields started: repeats add to them, not to ?base's
+        lists {}]
     (each [_ [path v] (ipairs fields)]
-      (let [keys (icollect [k (path:gmatch "[^.]+")] k)]
+      (let [keys (icollect [k (path:gmatch "[^.]+")] k)
+            schema (coerce.schema-at ?schema keys)]
         (when (= nil (. keys 1))
           (error (.. "field path '" path "' has no field name") 0))
-        (set-nested body keys
-                    (coerce.from-string v (coerce.schema-at ?schema keys)))))
+        (if (and (= (coerce.type-of schema) "array") (not (v:match "^%s*%[")))
+            (let [item (coerce.from-string v (?. schema :items))]
+              (if (. lists path)
+                  (table.insert (. lists path) item)
+                  (let [list (json.array [item])]
+                    (tset lists path list)
+                    (set-nested body keys list))))
+            (set-nested body keys (coerce.from-string v schema)))))
     body))
 
 (fn file-part [value]

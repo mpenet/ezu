@@ -6,6 +6,7 @@ All notable changes to ezu, named atlas until 1.0.0-beta7. The format follows [K
 
 ### Changed
 
+- A field of an `array` property (`--b.tags=a`, `tags=a` for a workflow input) adds an item, typed by the items schema, so repeating it builds a list; a JSON array (`[…]`) is still the whole list.
 - **Workflow inputs are `name=value` arguments** (`ezu az vm create name=web1 size=medium`), typed from the inputs schema; `-i`, `--i.`/`--input.`, and `-d`/`--b.` for workflows are gone (they say so). Arguments starting with `-` are always ezu's options and `name=value` ones always inputs, so neither can shadow the other; an unknown input name stops with a suggestion. Positional inputs are those a workflow declares in `x-ezu-args`, no longer guessed from the path parameters of its steps. Completion offers `NAME=` and allowed values; `az --check` checks `x-ezu-args`.
 - atlas is now **ezu** (絵図, a pictorial map): the command, the Lua modules (`require "ezu"`), the rock and the Homebrew formula. Configuration and cache are in `~/.config/ezu` and `~/.cache/ezu`; copy `~/.config/atlas` there to keep your profiles.
 

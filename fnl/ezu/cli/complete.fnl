@@ -238,7 +238,9 @@ being typed (name=…)."
                       (let [n (w:match "^([%a_][%w_%-]*)[%.=]")]
                         (when n (values n true))))]
           (icollect [_ n (ipairs (sorted-keys props))]
-            (when (not (. given n))
+            ;; a list can take more items
+            (when (or (not (. given n))
+                      (= (schema-field (. props n) :type) :array))
               {:value (.. n "=") :help (schema-field (. props n) :description)}))))))
 
 (fn complete-entries [line ctx]

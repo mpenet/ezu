@@ -89,7 +89,31 @@
             (it "falls back to JSON literal rules without schema"
                 (fn []
                   (assert.are.same {:a "007" :b 5}
-                                   (cli.build-body [["a" "007"] ["b" "5"]] nil))))))
+                                   (cli.build-body [["a" "007"] ["b" "5"]] nil))))
+            (it "builds lists from repeated fields, each item typed"
+                (fn []
+                  (let [schema {:type "object"
+                                :properties {:tags {:type "array"
+                                                    :items {:type "string"}}
+                                             :ids {:type "array"
+                                                   :items {:type "integer"}}
+                                             :o {:type "object"
+                                                 :properties {:l {:type "array"}}}}}]
+                    (assert.are.same {:tags ["a" "007"] :ids [1 2] :o {:l [3]}}
+                                     (cli.build-body [["tags" "a"]
+                                                      ["ids" "1"]
+                                                      ["tags" "007"]
+                                                      ["ids" "2"]
+                                                      ["o.l" "3"]]
+                                                     schema))
+                    ;; a JSON array is the whole list
+                    (assert.are.same {:tags ["x" "y"]}
+                                     (cli.build-body [["tags" "[\"x\", \"y\"]"]]
+                                                     schema))
+                    ;; fields replace what the base had, rather than adding to it
+                    (assert.are.same {:tags ["a"]}
+                                     (cli.build-body [["tags" "a"]] schema
+                                                     {:tags ["old"]})))))))
 
 (describe "cli.op-request"
           (fn []

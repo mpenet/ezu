@@ -42,7 +42,7 @@ ezu op myapi create-vm --b.instance-type.id=abc123 --b.disk.size=10
 
 `--b.` fields are merged: `--b.a.b=1 --b.a.c=2` gives `{"a": {"b": 1, "c": 2}}`. With `-d` as well, the fields are merged over its object.
 
-Field values take their type from the request schema: a `string` property keeps `007` as `"007"`, `integer` and `number` properties become numbers, `boolean` takes `true` or `false`, and `array` and `object` properties take JSON (`--b.tags='["a","b"]'`). A field the schema doesn't describe follows JSON's rules: `42`, `-1.5`, `true` and `false` become numbers and booleans, anything else stays a string.
+Field values take their type from the request schema: a `string` property keeps `007` as `"007"`, `integer` and `number` properties become numbers, `boolean` takes `true` or `false`, an `array` property takes one item per field, typed by its `items` schema (`--b.tags=a --b.tags=b` gives `["a", "b"]`) or a whole JSON array (`--b.tags='["a","b"]'`), and an `object` property takes JSON. A field the schema doesn't describe follows JSON's rules: `42`, `-1.5`, `true` and `false` become numbers and booleans, anything else stays a string.
 
 How `-d` is read depends on the operation's request content type:
 

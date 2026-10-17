@@ -19,16 +19,19 @@ the floating-point range gives nil."
   (let [(ok v) (pcall json.decode s)]
     (if (and ok (not= v nil)) v s)))
 
+(fn type-of [?schema]
+  "The type ?schema asks for, or nil: a 3.1 boolean schema says nothing
+about it, and of a 3.1 list of types, the one that isn't null decides."
+  (let [t (when (= (type ?schema) :table) ?schema.type)]
+    (if (= (type t) :table)
+        (accumulate [found nil _ x (ipairs t) &until found]
+          (when (not= x "null") x))
+        t)))
+
 (fn from-string [s ?schema]
   "Convert s to the type ?schema asks for; without a schema, JSON numbers
 and true/false are converted and everything else stays a string."
-  ;; a 3.1 boolean schema says nothing about the type; of a 3.1 type array,
-  ;; the type that isn't null decides
-  (match (let [t (when (= (type ?schema) :table) ?schema.type)]
-           (if (= (type t) :table)
-               (accumulate [found nil _ x (ipairs t) &until found]
-                 (when (not= x "null") x))
-               t))
+  (match (type-of ?schema)
     "string" s
     "integer" (or (math.tointeger (json-number s)) s)
     "number" (or (json-number s) s)
@@ -47,4 +50,4 @@ and true/false are converted and everything else stays a string."
     (when (= (type cur) :table)
       (?. cur :properties k))))
 
-{: from-string : schema-at}
+{: from-string : schema-at : type-of}

@@ -1816,7 +1816,13 @@ does, which a streaming transport hands over one by one."
                     (assert.is_truthy (script.out:find "(flows __complete" 1
                                                        true))
                     (assert.is_nil (script.out:find "ezu" 1 true))
-                    (assert.are.equal "fetchPet" cands.out))))
+                    (assert.are.equal "fetchPet" cands.out))
+                  ;; shell functions of their own: loading both completions
+                  ;; mustn't make ezu's call this command
+                  (each [_ shell (ipairs [:bash :zsh])]
+                    (let [r (ezu-run ["completion" shell] nil "flows")]
+                      (assert.is_nil (r.out:find "ezu" 1 true) r.out)
+                      (assert.is_truthy (r.out:find "_flows" 1 true) r.out)))))
             (it "tells how to make the command with --link"
                 (fn []
                   (let [r (ezu-run ["az" "flows" "--link"])]

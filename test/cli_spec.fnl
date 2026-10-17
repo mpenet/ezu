@@ -110,6 +110,10 @@
                     (assert.are.same {:tags ["x" "y"]}
                                      (cli.build-body [["tags" "[\"x\", \"y\"]"]]
                                                      schema))
+                    ;; an item that only looks like a JSON array is an item
+                    (assert.are.same {:tags ["[draft]"]}
+                                     (cli.build-body [["tags" "[draft]"]]
+                                                     schema))
                     ;; fields replace what the base had, rather than adding to it
                     (assert.are.same {:tags ["a"]}
                                      (cli.build-body [["tags" "a"]] schema

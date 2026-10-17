@@ -119,13 +119,6 @@ once a name and = are typed."
                          (values name
                                  {:enum (enum-of prop)
                                   :help (schema-field prop :description)}))
-                 :input (collect [name prop (pairs (or (schema-field (?. context
-                                                                         :inputs)
-                                                                     :properties)
-                                                       {}))]
-                          (values name
-                                  {:enum (enum-of prop)
-                                   :help (schema-field prop :description)}))
                  :server (collect [name v (pairs (or (?. context :server
                                                          :variables)
                                                      {}))]
@@ -289,11 +282,16 @@ being typed (name=…)."
 
 (fn named-printer [?command]
   "print, with ezu's name replaced by ?command: the completion of a link to
-ezu named after a workflow document calls it by that name."
-  (fn [line]
-    (print (if ?command
-               (pick-values 1 (line:gsub "%f[%w_]ezu%f[^%w_]" ?command))
-               line))))
+ezu named after a workflow document calls it by that name, through shell
+functions of its own (_ezu… become _NAME…), so it can be loaded along ezu's."
+  (let [identifier (when ?command
+                     (pick-values 1 (?command:gsub "[^%w_]" "_")))]
+    (fn [line]
+      (print (if ?command
+                 (let [(named) (line:gsub "_ezu%f[^%w]" (.. "_" identifier))
+                       (called) (named:gsub "%f[%w_]ezu%f[^%w_]" ?command)]
+                   called)
+                 line)))))
 
 (fn completion-fish [?command]
   (local print (named-printer ?command))

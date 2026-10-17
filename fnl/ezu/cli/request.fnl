@@ -64,7 +64,10 @@ list the fields start (a value written as a JSON array is the whole list)."
             schema (coerce.schema-at ?schema keys)]
         (when (= nil (. keys 1))
           (error (.. "field path '" path "' has no field name") 0))
-        (if (and (= (coerce.type-of schema) "array") (not (v:match "^%s*%[")))
+        ;; a value that is a JSON array is the whole list, anything else an
+        ;; item ([draft] included)
+        (if (and (= (coerce.type-of schema) "array")
+                 (not (json.array? (coerce.from-string v schema))))
             (let [item (coerce.from-string v (?. schema :items))]
               (if (. lists path)
                   (table.insert (. lists path) item)

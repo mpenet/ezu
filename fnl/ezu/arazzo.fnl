@@ -937,6 +937,7 @@ the step runs again), :op-ref and :calls (:operation or :workflow)."
     (run-workflow doc workflow-id (or inputs {}) clients ?opts)))
 
 {:arazzo-source arazzo-source
+ :external-workflow external-workflow
  :location location
  :source-url source-url
  :build-clients build-clients

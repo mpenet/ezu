@@ -93,7 +93,7 @@ documents its workflows come from: [{:name :doc :clients :url}]."
 
     (fn other-workflow [id]
       "The workflow of another document id names, once its document is loaded."
-      (let [(source wid) (id:match "^%$sourceDescriptions%.([^%.]+)%.(.+)$")
+      (let [(source wid) (arazzo.external-workflow id)
             other (when source (. loaded source))]
         (when other
           (arazzo.find-workflow other.doc wid))))
@@ -104,7 +104,7 @@ one of an Arazzo source's."
       (if (not= (type id) :string)
           (report :error where "workflowId must be a string")
           (external? id)
-          (let [(source wid) (id:match "^%$sourceDescriptions%.([^%.]+)%.(.+)$")]
+          (let [(source wid) (arazzo.external-workflow id)]
             (if (not source)
                 (report :error where (.. "unknown workflow '" id "'"))
                 (let [other (other-document where source)]
@@ -446,8 +446,13 @@ without running it: [{:level :error|:warning :where :message}]. ?supplied:
 anyway (from a profile), header names lowercased. ?opts are the run's options,
 to load the Arazzo documents doc's workflows come from or its sources mount
 (trust-sources, ssl…): their problems are reported too, each where starting
-with the source's name. The documents checked, doc first, come second."
-  (let [opts (or ?opts {})
+with the source's name, also its :document. The documents checked, doc first,
+come second."
+  (let [;; a copy: the documents the check loads stay out of the caller's
+        ;; runs
+        opts (collect [k v (pairs (or ?opts {}))]
+               k
+               v)
         problems []
         checked []
         visited {}]
@@ -456,7 +461,8 @@ with the source's name. The documents checked, doc first, come second."
       (let [(found externals) (checker d c (or ?supplied {}) opts)]
         (each [_ p (ipairs found)]
           (when prefix
-            (set p.where (.. prefix " › " p.where)))
+            (set p.where (.. prefix " › " p.where))
+            (set p.document prefix))
           (table.insert problems p))
         (each [_ e (ipairs externals)]
           (when (not (. visited e.url))

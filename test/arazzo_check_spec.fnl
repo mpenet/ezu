@@ -301,6 +301,7 @@
                       ;; the other document's own problems, under its name
                       (assert.are.same ["other › broken › step s: unknown workflow 'missing'"]
                                        (messages fine))
+                      (assert.are.equal "other" (. fine 1 :document))
                       (assert.is_true (has wrong
                                            "wf › step call: source 'other' has no workflow 'nope'"
                                            :error))
@@ -310,6 +311,17 @@
                       (assert.is_true (has far
                                            "wf › step call: Arazzo source 'other' is not next to the document"
                                            :error))))))
+            (it "leaves the options it is given as they are"
+                (fn []
+                  (let [opts {:trust-sources false}]
+                    (check.check (doc [{:stepId "call"
+                                        :workflowId "$sourceDescriptions.other.ow"}]
+                                      nil
+                                      {:sourceDescriptions [{:name "other"
+                                                             :type "arazzo"
+                                                             :url "build/nowhere/o.json"}]})
+                                 clients {} opts)
+                    (assert.are.same {:trust-sources false} opts))))
             (it "checks command words, and the documents sources mount"
                 (fn []
                   (let [json (require :ezu.json)

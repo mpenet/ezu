@@ -366,8 +366,11 @@ without running it; exit 1 when something is."
         prefix (.. (or ?workflow-id "") " ›")
         (found checked) (arazzo-check.check doc clients supplied opts)
         problems (icollect [_ problem (ipairs found)]
-                   (when (or (not ?workflow-id) (= problem.where ?workflow-id)
-                             (= (problem.where:sub 1 (length prefix)) prefix))
+                   (when (or (not ?workflow-id)
+                             (and (= nil problem.document)
+                                  (or (= problem.where ?workflow-id)
+                                      (= (problem.where:sub 1 (length prefix))
+                                         prefix))))
                      problem))
         ;; one workflow, or all those of the documents checked
         documents (if ?workflow-id [doc] checked)

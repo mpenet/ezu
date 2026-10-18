@@ -51,6 +51,35 @@ a JSON Schema examples array, or an OpenAPI Example's value."
       (and (= (type k) :number) (= key :examples))
       (and (= k :value) (= parent :examples) (not (. schema-maps grandparent)))))
 
+;; keywords that describe rather than constrain: next to a $ref, they replace
+;; the target's
+(local annotations {:title true
+                    :description true
+                    :summary true
+                    :default true
+                    :example true
+                    :examples true
+                    :deprecated true
+                    :readOnly true
+                    :writeOnly true
+                    :$comment true})
+
+(fn with-siblings [target siblings]
+  "target with the keywords written next to the $ref naming it, as JSON Schema
+2020-12 applies them: annotations replace the target's, other keywords are
+added, and where both have one, both must hold (allOf). target stays as it is."
+  (let [merged (setmetatable (collect [k v (pairs target)] k v)
+                             (getmetatable target))
+        both {}]
+    (each [k v (pairs siblings)]
+      (if (or (. annotations k) (= nil (. merged k))) (tset merged k v)
+          (not= v (. merged k)) (tset both k v)))
+    (if (next both)
+        (doto (collect [k v (pairs siblings)]
+                (when (. annotations k) (values k v)))
+          (tset :allOf (json.array [merged both])))
+        merged)))
+
 (fn pointer-keys [pointer]
   "The last three segments of a JSON pointer, unescaped, last first."
   (let [segs (icollect [seg (pointer:gmatch "/([^/]*)")]
@@ -145,7 +174,20 @@ nowhere, or only at each other, raise."
 
     (set deref (fn [from value ?key ?parent ?grandparent]
                  (match (ref-of value)
-                   ref (resolve-ref from ref ?key ?parent ?grandparent)
+                   ref (let [target (resolve-ref from ref ?key ?parent
+                                                 ?grandparent)
+                             siblings (collect [k v (pairs value)]
+                                        (when (not= k "$ref")
+                                          (values k
+                                                  (if (data? k ?key ?parent
+                                                             ?grandparent)
+                                                      v
+                                                      (deref from v k ?key
+                                                             ?parent)))))]
+                         (if (and (next siblings) (= (type target) :table)
+                                  (not= target json.null))
+                             (with-siblings target siblings)
+                             target))
                    _ (if (or (not= (type value) :table) (= value json.null))
                          value
                          (. copies value)

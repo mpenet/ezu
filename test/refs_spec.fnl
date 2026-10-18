@@ -150,6 +150,42 @@
                                          "cannot resolve $ref 'other.yaml#/X': the schema's location is unknown"
                                          1 true)))))))
 
+(describe "keywords next to a $ref"
+          (fn []
+            (local root {:defs {:x {:type "object"
+                                    :description "theirs"
+                                    :required ["a"]}}})
+            (it "override the target's annotations, which stays as it was"
+                (fn []
+                  (let [v (deref root
+                                 {:$ref "#/defs/x"
+                                  :description "mine"
+                                  :title "X"})]
+                    (assert.are.same {:type "object"
+                                      :description "mine"
+                                      :title "X"
+                                      :required ["a"]}
+                                     v)
+                    (assert.are.equal "theirs" root.defs.x.description))))
+            (it "add the keywords the target lacks"
+                (fn []
+                  (assert.are.same {:type "object"
+                                    :description "theirs"
+                                    :required ["a"]
+                                    :nullable true}
+                                   (deref root {:$ref "#/defs/x" :nullable true}))))
+            (it "apply with the target's when both have them"
+                (fn []
+                  (assert.are.same {:description "mine"
+                                    :allOf [{:type "object"
+                                             :description "mine"
+                                             :required ["a"]}
+                                            {:required ["b"]}]}
+                                   (deref root
+                                          {:$ref "#/defs/x"
+                                           :description "mine"
+                                           :required ["b"]}))))))
+
 (describe "refs edge cases"
           (fn []
             (it "keeps + literal in fragments"

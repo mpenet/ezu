@@ -27,6 +27,7 @@ All notable changes to ezu, named atlas until 1.0.0-beta7. The format follows [K
 
 ### Fixed
 
+- Keywords next to a `$ref` in a schema were ignored: a `description` beside it now replaces the target's (in help too), and other keywords apply along with the target's (`nullable: true` beside a `$ref`, a common OpenAPI 3.0 pattern, included).
 - On macOS, a plugin file with extended attributes (`@` in `ls -l`) and an access list was loaded: `ls` shows `@` in place of the `+` that marks an access list. ezu now reads the access list itself (`ls -le`) and refuses such a plugin.
 - A workflow failing on a regex or JSONPath condition shows the condition with its `{$expressions}` replaced, and says it `doesn't match` or `selects nothing in` its context; a failure inside a workflow run by a step names that workflow (`step 'find' (instance-id) › step 'list' failed: …`) rather than repeating `failed:`.
 - On a terminal that doesn't report its width, the lines of workflow progress were cut down to `…`; they now fit 80 columns.

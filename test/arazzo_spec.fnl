@@ -1953,4 +1953,119 @@ and record their requests in the returned list."
                                            "Arazzo source 'common' is not next to the document"
                                            1 true)))
                     (assert.is_true ok result)
-                    (assert.are.equal 1 result.outputs.r))))))
+                    (assert.are.equal 1 result.outputs.r))))
+            (it "says where a source refused through $self resolves"
+                (fn []
+                  (let [elsewhere (doto (arazzo-doc main-doc.sourceDescriptions
+                                                    main-doc.workflows)
+                                    (tset "$self"
+                                          "https://elsewhere.test/main.json"))
+                        (_ err) (run-in (tmp-dir {:main.json elsewhere}) "w"
+                                        {:n 1})]
+                    (assert.is_truthy (: (tostring err) :find
+                                         "(lib/common.json, at https://elsewhere.test/lib/common.json)"
+                                         1 true)
+                                      (tostring err)))))
+            (it "fails the run on a document problem, whatever the actions say"
+                (fn []
+                  (let [doc (arazzo-doc [{:name "common"
+                                          :url "https://elsewhere.test/c.json"
+                                          :type "arazzo"}
+                                         {:name "bad" :url 5 :type "arazzo"}]
+                                        [{:workflowId "w"
+                                          :steps [{:stepId "s"
+                                                   :workflowId "$sourceDescriptions.common.echo"
+                                                   :onFailure [{:name "ignore"
+                                                                :type "end"}]}]}
+                                         {:workflowId "missing"
+                                          :steps [{:stepId "s"
+                                                   :workflowId "$sourceDescriptions.nope.echo"
+                                                   :onFailure [{:name "again"
+                                                                :type "retry"
+                                                                :retryLimit 3}]}]}
+                                         {:workflowId "url"
+                                          :steps [{:stepId "s"
+                                                   :workflowId "$sourceDescriptions.bad.echo"}]}])
+                        (ok err) (run-in (tmp-dir {:main.json doc}) "w" {})
+                        (ok2 err2) (run-in (tmp-dir {:main.json doc}) "missing"
+                                           {})
+                        (_ err3) (run-in (tmp-dir {:main.json doc}) "url" {})]
+                    (assert.is_false ok)
+                    (assert.is_truthy (: (tostring err) :find
+                                         "step 's' (common.echo) › Arazzo source 'common' is not next to the document"
+                                         1 true)
+                                      (tostring err))
+                    (assert.is_false ok2)
+                    (assert.is_truthy (: (tostring err2) :find
+                                         "unknown source 'nope'" 1 true))
+                    (assert.is_truthy (: (tostring err3) :find
+                                         "source 'bad': its url must be a string"
+                                         1 true)
+                                      (tostring err3)))))
+            (it "says why a source can't be read, without where in ezu"
+                (fn []
+                  (let [(_ err) (run-in (tmp-dir {:main.json main-doc}) "w"
+                                        {:n 1})]
+                    (assert.is_truthy (: (tostring err) :find "common" 1 true))
+                    (assert.is_nil (: (tostring err) :find "%.lua:%d+:")
+                                   (tostring err)))))
+            (it "stops workflows nested too deep"
+                (fn []
+                  (let [files {}]
+                    (for [i 0 70]
+                      (tset files (.. "d" i ".json")
+                            (arazzo-doc [{:name "next"
+                                          :url (.. "d" (+ i 1) ".json")
+                                          :type "arazzo"}]
+                                        [{:workflowId "w"
+                                          :steps (if (< i 70)
+                                                     [{:stepId "s"
+                                                       :workflowId "$sourceDescriptions.next.w"}]
+                                                     [])}])))
+                    (tset files :main.json (. files :d0.json))
+                    (let [(ok err) (run-in (tmp-dir files) "w" {})]
+                      (assert.is_false ok)
+                      (assert.is_truthy (: (tostring err) :find
+                                           "workflows nested more than 64 deep"
+                                           1 true)
+                                        (tostring err))))))
+            (it "knows its own document under any path to it"
+                (fn []
+                  (let [doc (arazzo-doc [{:name "other"
+                                          :url "other.json"
+                                          :type "arazzo"}]
+                                        [{:workflowId "w"
+                                          :steps [{:stepId "s"
+                                                   :workflowId "$sourceDescriptions.other.back"}]}])
+                        other (arazzo-doc [{:name "main"
+                                            :url "main.json"
+                                            :type "arazzo"}]
+                                          [{:workflowId "back"
+                                            :steps [{:stepId "s"
+                                                     :workflowId "$sourceDescriptions.main.w"}]}])
+                        dir "build/cross-doc-path"]
+                    (os.execute (.. "mkdir -p " dir))
+                    (each [name t (pairs {:main.json doc :other.json other})]
+                      (with-open [f (io.open (.. dir "/" name) :w)]
+                        (f:write (json.encode t))))
+                    (let [(ok err) (pcall arazzo.run
+                                          (.. "./" dir "/./main.json") "w" {})]
+                      (os.execute (.. "rm -rf " dir))
+                      (assert.is_false ok)
+                      (let [expected "workflow cycle: w -> other.back -> main.w"]
+                        (assert.are.equal expected
+                                          (: (tostring err) :sub
+                                             (- (length expected)))))))))
+            (it "names another document's workflow by its source in progress events"
+                (fn []
+                  (let [seen []
+                        dir (tmp-dir {:main.json main-doc
+                                      :lib/common.json echo-doc
+                                      :lib/api.json api})
+                        (ok result) (run-in dir "w" {:n 2}
+                                            {:on-step #(table.insert seen
+                                                                     $.workflow)})]
+                    (assert.is_true ok result)
+                    (assert.is_truthy (accumulate [found false _ w (ipairs seen)]
+                                        (or found (= w "common.echo")))
+                                      (table.concat seen ",")))))))

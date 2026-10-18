@@ -433,6 +433,7 @@ inside them are safe."
         url))))
 
 {: camel->kebab
+ : normalize-segments
  : link-urls
  : query-string
  : operation-name

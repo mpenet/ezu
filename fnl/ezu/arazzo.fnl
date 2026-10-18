@@ -25,13 +25,25 @@
 ;; ({:location :ssl :timeout}), to resolve its relative $refs the same way
 (local doc-sources (setmetatable {} {:__mode :k}))
 
+(fn without-position [message]
+  "message without the file:line: Lua puts before an error."
+  (pick-values 1 (: (tostring message) :gsub "^[^%s:]+%.lua:%d+: " "")))
+
 (fn load-doc [path ?opts]
   "Load and parse an Arazzo document (JSON or YAML) from a local path or
 http(s):// URL. ?opts: {:ssl :timeout}, also used for the documents it
-refers to."
+refers to. A local path is recorded without its . and .. segments, so a
+document is the same whichever way it is reached."
   (let [fetch-opts {:ssl (?. ?opts :ssl) :timeout (?. ?opts :timeout)}
-        (ok parsed) (pcall yaml.decode (http-mod.fetch-text path fetch-opts))]
-    (assert ok (.. "failed to parse arazzo document: " (tostring parsed)))
+        path (if (path:match "^%a[%w+.-]*://") path
+                 (util.normalize-segments path))
+        (fetched text) (pcall http-mod.fetch-text path fetch-opts)
+        _ (when (not fetched)
+            (error (without-position text) 0))
+        (ok parsed) (pcall yaml.decode text)]
+    (when (not ok)
+      (error (.. "failed to parse arazzo document: " (without-position parsed))
+             0))
     (let [version (?. parsed :arazzo)]
       (when (not (and (= (type version) :string)
                       (or (version:match "^1%.0%.") (version:match "^1%.1%."))))
@@ -42,13 +54,16 @@ refers to."
             {:location path :ssl fetch-opts.ssl :timeout fetch-opts.timeout}))
     parsed))
 
+(fn location [doc]
+  "Where doc was loaded from, or nil."
+  (?. doc-sources doc :location))
+
 (fn base-uri [doc ?location]
   "The URI relative references in doc resolve against: its $self, itself
 relative to where doc came from, else that location."
-  (let [location (or ?location (?. doc-sources doc :location))
+  (let [here (or ?location (location doc))
         self (. doc "$self")]
-    (if (and self location) (util.resolve-reference location self)
-        (or self location))))
+    (if (and self here) (util.resolve-reference here self) (or self here))))
 
 (fn doc-resolver [doc]
   "$ref resolver for doc, references into other files resolved from its
@@ -392,6 +407,20 @@ and the workflow it ran: step 'find' (lookup) › step 'list' failed: …"
         (.. "step '" step-id "' failed: " (tostring failure) "; HTTP "
             (tostring (or (?. resp :status) "?")) body))))
 
+(local fatal-meta {:__tostring #$.message})
+
+(fn fail-run [message]
+  "Raise message as a problem with the documents themselves (a source that
+can't be used, a workflow that doesn't exist, a cycle): it fails the run,
+whatever the steps' actions say."
+  (error (setmetatable {: message :fatal true} fatal-meta) 0))
+
+(fn fatal? [err]
+  (= (getmetatable err) fatal-meta))
+
+;; deeper than this, workflows running workflows are taken for a runaway
+(local max-depth 64)
+
 (fn find-workflow [doc workflow-id]
   "The workflow with workflow-id in doc, or nil."
   (accumulate [found nil _ wf (ipairs (or doc.workflows [])) &until found]
@@ -405,8 +434,13 @@ means a cycle (dependsOn or a step calling itself)."
         keys (or (?. ?opts :workflow-keys) [])]
     (each [_ active (ipairs keys)]
       (when (= active key)
-        (error (.. "workflow cycle: " (table.concat stack " -> ") " -> " label)
-               0)))
+        (fail-run (.. "workflow cycle: " (table.concat stack " -> ") " -> "
+                      label))))
+    (when (>= (length stack) max-depth)
+      (fail-run (.. "workflows nested more than " max-depth " deep: "
+                    (table.concat stack " -> " 1 3) " -> … -> "
+                    (table.concat stack " -> " (- (length stack) 2)) " -> "
+                    label)))
     (doto (collect [k v (pairs (or ?opts {}))]
             k
             v)
@@ -419,7 +453,7 @@ means a cycle (dependsOn or a step calling itself)."
 (fn emit [run event]
   "Pass event to the run's on-step callback, with the workflow and its depth."
   (when run.on-step
-    (set event.workflow run.wf.workflowId)
+    (set event.workflow run.label)
     (set event.depth run.depth)
     (run.on-step event)))
 
@@ -464,7 +498,10 @@ means a cycle (dependsOn or a step calling itself)."
                :outputs (if ok sub.outputs {})
                :request nil
                :response nil})
-        (if ok {:ok true} {:ok false :error sub :workflow step.workflowId}))
+        (if ok {:ok true} (fatal? sub)
+            (fail-run (.. "step '" step.stepId "' ("
+                          (workflow-label step.workflowId) ") › " sub.message))
+            {:ok false :error sub :workflow step.workflowId}))
       ;; operation step: merge workflow params then step params
       (let [step-params (expand-references run.doc step.parameters)
             _ (each [_ p (ipairs step-params)]
@@ -658,16 +695,19 @@ among local files, or on doc's origin, $self included."
                          &until found]
               (when (= s.name source-name) s))]
     (when (not src)
-      (error (.. "unknown source '" source-name "'") 0))
-    (when (or (not= src.type :arazzo) (not= (type src.url) :string))
-      (error (.. "source '" source-name "' is not an Arazzo document") 0))
-    (let [location (or (?. doc-sources doc :location) "./")
+      (fail-run (.. "unknown source '" source-name "'")))
+    (when (not= src.type :arazzo)
+      (fail-run (.. "source '" source-name "' is not an Arazzo document")))
+    (when (not= (type src.url) :string)
+      (fail-run (.. "source '" source-name "': its url must be a string")))
+    (let [here (or (location doc) "./")
           base (base-uri doc)
           url (if base (util.resolve-reference base src.url) src.url)]
-      (when (not (or (?. ?opts :trust-sources) (next-to? location src.url url)))
-        (error (.. "Arazzo source '" source-name
-                   "' is not next to the document (" src.url
-                   "); it is only loaded with trust-sources") 0))
+      (when (not (or (?. ?opts :trust-sources) (next-to? here src.url url)))
+        (fail-run (.. "Arazzo source '" source-name
+                      "' is not next to the document (" src.url
+                      (if (= url src.url) "" (.. ", at " url))
+                      "); it is only loaded with trust-sources")))
       url)))
 
 (fn arazzo-source [doc source-name opts]
@@ -677,7 +717,9 @@ once per run (opts.arazzo-documents, by URL); see source-url."
     (when (not opts.arazzo-documents)
       (set opts.arazzo-documents {}))
     (or (. opts.arazzo-documents url)
-        (let [sub (load-doc url opts)
+        (let [(loaded sub) (pcall load-doc url opts)
+              _ (when (not loaded)
+                  (fail-run (.. "source '" source-name "': " (tostring sub))))
               client-opts (collect [k v (pairs opts)]
                             (when (not= k :on-step) (values k v)))
               entry {:doc sub
@@ -690,25 +732,20 @@ once per run (opts.arazzo-documents, by URL); see source-url."
           (tset opts.arazzo-documents url entry)
           entry))))
 
-(fn location [doc]
-  "Where doc was loaded from, or nil."
-  (?. doc-sources doc :location))
-
 (fn workflow-key [doc workflow-id]
   "What tells a workflow from all others: its document's location and its id."
-  (.. (or (?. doc-sources doc :location) (tostring doc)) "#" workflow-id))
+  (.. (or (location doc) (tostring doc)) "#" workflow-id))
 
 (fn run-workflow [doc workflow-id given-inputs clients ?opts]
   (let [label (or (?. ?opts :workflow-label) workflow-id)
         wf (or (find-workflow doc workflow-id)
-               (error (.. "workflow not found: " label) 0))
+               (fail-run (.. "workflow not found: " label)))
         opts (enter-workflow (workflow-key doc workflow-id) label ?opts)
         ;; documents and clients are shared by the workflows the run runs
         _ (when (not opts.arazzo-documents)
             (set opts.arazzo-documents {})
-            (match (?. doc-sources doc :location)
-              location (tset opts.arazzo-documents location
-                             {: doc : clients :url location})))
+            (match (location doc)
+              url (tset opts.arazzo-documents url {: doc : clients : url})))
         _ (when (not opts.source-clients)
             (set opts.source-clients {}))
         _ (check-steps doc wf)
@@ -725,6 +762,7 @@ once per run (opts.arazzo-documents, by URL); see source-url."
                         src)}
         run {: doc
              : wf
+             : label
              : clients
              : ctx
              : inputs

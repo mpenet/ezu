@@ -93,6 +93,20 @@
                     (assert.are.equal "list" deeper.suggestion)
                     (assert.are.same ["instance"] deeper.path))))))
 
+(describe "words and values"
+          (fn []
+            (it "suggests workflow ids at a document's top too"
+                (fn []
+                  (let [r (commands.resolve compute ["instance-di" "x"] #nil)]
+                    (assert.are.equal "instance-id" r.suggestion))))
+            (it "stops at the words given before --"
+                (fn []
+                  (let [doc {:workflows [(wf "inst" "inst")
+                                         (wf "inst-list" "inst list")]}
+                        r (commands.resolve doc ["inst" "list"] #nil 2)]
+                    (assert.are.equal "inst" r.workflow.workflowId)
+                    (assert.are.same ["list"] r.rest))))))
+
 (describe "listing commands"
           (fn []
             (it "lists a group's words, groups with the words under them"
@@ -115,6 +129,14 @@
                                                                             load)
                                                           :node)
                                                        load)))))
+            (it "names workflows without an id so"
+                (fn []
+                  (assert.are.same [{:word "(no workflowId)" :summary "lost"}]
+                                   (commands.entries (. (commands.resolve {:workflows [{:summary "lost"}]}
+                                                                          []
+                                                                          #nil)
+                                                        :node)
+                                                     #nil))))
             (it "lists a document without commands by workflow id"
                 (fn []
                   (assert.are.same [{:word "b-flow" :summary "B"}

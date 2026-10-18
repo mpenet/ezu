@@ -737,6 +737,18 @@ among local files, or on doc's origin, $self included."
                       "); it is only loaded with trust-sources")))
       url)))
 
+(fn source-loader [opts ?load-doc]
+  "(load doc source): the Arazzo document a source of doc names, loaded once
+with (?load-doc url opts) (load-doc by default) and opts' ssl and timeout,
+next to doc unless opts.trust-sources."
+  (let [loaded {}
+        load (or ?load-doc load-doc)]
+    (fn [doc source]
+      (let [url (source-url doc source.name opts)]
+        (when (not (. loaded url))
+          (tset loaded url (load url {:ssl opts.ssl :timeout opts.timeout})))
+        (. loaded url)))))
+
 (fn check-server-variables [doc opts]
   "Raise for a server variable that no OpenAPI source of doc, or of the
 documents its workflows can reach through Arazzo sources, declares. Sources
@@ -937,6 +949,7 @@ the step runs again), :op-ref and :calls (:operation or :workflow)."
     (run-workflow doc workflow-id (or inputs {}) clients ?opts)))
 
 {:arazzo-source arazzo-source
+ :source-loader source-loader
  :external-workflow external-workflow
  :location location
  :source-url source-url

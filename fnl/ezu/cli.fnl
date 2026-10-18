@@ -444,17 +444,10 @@ context's."
     {: named : file : doc : profile-name : profile}))
 
 (fn source-loader [context p env]
-  "(load doc source): the Arazzo document a source of doc names, loaded once,
-next to doc unless sources are trusted."
-  (let [loaded {}
-        opts {:trust-sources (trust-sources? context.named p)}
-        load-opts {:ssl (merge-ssl context.profile p.ssl)
-                   :timeout (request-timeout context.profile p env.config)}]
-    (fn [doc source]
-      (let [url (arazzo.source-url doc source.name opts)]
-        (when (not (. loaded url))
-          (tset loaded url (arazzo.load-doc url load-opts)))
-        (. loaded url)))))
+  "(load doc source) for the documents context's document mounts."
+  (arazzo.source-loader {:trust-sources (trust-sources? context.named p)
+                         :ssl (merge-ssl context.profile p.ssl)
+                         :timeout (request-timeout context.profile p env.config)}))
 
 (fn list-commands [node load]
   "Print the commands under node, with what they do."
@@ -491,7 +484,10 @@ next to doc unless sources are trusted."
                 (#(each [_ a (ipairs (or p.path-params []))]
                     (table.insert $ a))))
         load (source-loader context p env)
-        (ok target) (pcall commands.resolve doc words load)
+        ;; words given after -- are values (words[1] is p.operation)
+        values-from (accumulate [first nil i (pairs (or p.literal {}))]
+                      (if (or (= nil first) (< (+ i 1) first)) (+ i 1) first))
+        (ok target) (pcall commands.resolve doc words load values-from)
         _ (when (not ok) (die (tostring target)))
         here (table.concat (doto [(or env.command (.. "ezu az " p.schema))]
                              (#(each [_ w (ipairs target.path)]

@@ -130,7 +130,7 @@ workflows:
 vm instance snapshot create web1      # or ezu az vm instance snapshot create web1
 ```
 
-On an Arazzo source, `x-ezu-command` mounts that document's commands under its words. A document of sources alone makes one command of several documents, each read only when a command line reaches it:
+On an Arazzo source, `x-ezu-command` mounts that document's commands under its words. A document of sources alone makes one command of several documents; a command reads only the documents its words go through (a listing reads those it lists, for their summaries):
 
 ```yaml
 # exoscale.arazzo.yaml, named exo in the configuration

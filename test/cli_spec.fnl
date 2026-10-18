@@ -916,6 +916,40 @@
 (fn complete [line]
   (cli.complete-line line completion-ctx))
 
+(describe "completion of a document's command words"
+          (fn []
+            (it "loads documents with the profile's TLS settings, mounted ones too"
+                (fn []
+                  (let [seen []
+                        ctx {:config {:profiles {:tls {:schema "S"
+                                                       :ssl {:cafile "/ca"}}
+                                                 :other {:schema "S"
+                                                         :ssl {:cafile "/other"}}}
+                                      :arazzo {:m {:file "M" :profile "tls"}}}
+                             :load-schema (fn [_] completion-schema)
+                             :load-doc (fn [path opts]
+                                         (table.insert seen
+                                                       (.. path " "
+                                                           (tostring (?. opts
+                                                                         :ssl
+                                                                         :cafile))))
+                                         (if (= path "M")
+                                             {:sourceDescriptions [{:name "sub"
+                                                                    :url "sub.json"
+                                                                    :type "arazzo"
+                                                                    :x-ezu-command "sub"}]
+                                              :workflows []}
+                                             {:workflows [{:workflowId "thing-get"
+                                                           :x-ezu-command "thing get"}]}))}]
+                    (assert.are.same ["thing"]
+                                     (cli.complete-line "az m sub " ctx))
+                    (assert.are.same ["M /ca" "sub.json /ca"] seen)
+                    (assert.are.same ["thing"]
+                                     (cli.complete-line "az m sub --profile=other "
+                                                        ctx))
+                    (assert.are.same ["M /other" "sub.json /other"]
+                                     [(. seen 3) (. seen 4)]))))))
+
 (describe "cli.complete-line"
           (fn []
             (it "completes subcommands"

@@ -182,21 +182,28 @@ a group (:entries), or a workflow and its inputs."
             (set c.server (. (ezu.servers schema) index))
             (set c.op (when name (. c.ops name)))))))
     (when (and (= cmd :az) target)
-      (let [(ok doc) (pcall ctx.load-doc
-                            (or (?. config :arazzo target :file)
-                                (home-path target))
-                            {:timeout ctx.timeout})]
-        (when (and ok (= (type doc) :table))
-          (let [after (icollect [i w (ipairs positional)]
-                        (when (> i 2) w))
-                trust {:trust-sources (or (= true
+      (let [;; the profile the command line or the document's configuration
+            ;; names: its TLS settings reach the documents
+            profile-name (or (accumulate [v nil i w (ipairs words)]
+                               (or (w:match "^%-%-profile=(.+)$")
+                                   (when (= w "--profile") (?. words (+ i 1))) v))
+                             (?. config :arazzo target :profile))
+            (_ profile) (pcall find-profile config profile-name)
+            load-opts {:trust-sources (or (= true
                                              (?. config :arazzo target
                                                  :trust-sources))
                                           (accumulate [found false _ w (ipairs words)]
-                                            (or found (= w "--trust-sources"))))}
-                load (fn [d source]
-                       (ctx.load-doc (arazzo.source-url d source.name trust)
-                                     {:timeout ctx.timeout}))
+                                            (or found (= w "--trust-sources"))))
+                       :ssl (merge-ssl profile nil)
+                       :timeout ctx.timeout}
+            (ok doc) (pcall ctx.load-doc
+                            (or (?. config :arazzo target :file)
+                                (home-path target))
+                            {:ssl load-opts.ssl :timeout ctx.timeout})]
+        (when (and ok (= (type doc) :table))
+          (let [after (icollect [i w (ipairs positional)]
+                        (when (> i 2) w))
+                load (arazzo.source-loader load-opts ctx.load-doc)
                 (resolved r) (pcall commands.resolve doc after load)]
             (when resolved
               (match r.kind

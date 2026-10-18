@@ -47,23 +47,25 @@
   "node, or the root of the document it mounts, loaded with load."
   (if node.mount (tree (load node.doc node.mount)) node))
 
-(fn resolve [doc words load]
+(fn resolve [doc words load ?values-from]
   "What words name in doc, loading mounted documents with (load doc source):
 {:kind :workflow :doc :workflow :rest :path} for a workflow, the words after
 it its arguments; {:kind :group :node :path} when the words end at a group;
 {:kind :unknown :word :suggestion :node :path} for a word that names nothing.
 At a document's top, a workflow's id names it too: helpers without words, and
-documents without commands."
+documents without commands. Words from index ?values-from on (those given
+after --) are a workflow's values, never command words."
   (var node (tree doc))
   (var result nil)
   (var i 1)
   (while (not result)
     (set node (enter node load))
     (let [word (. words i)
-          child (when word (. node.children word))
+          value? (and ?values-from (>= i ?values-from))
+          child (when (and word (not value?)) (. node.children word))
           path (icollect [j w (ipairs words)] (when (< j i) w))
           rest #(icollect [j w (ipairs words)] (when (>= j $) w))
-          by-id (when (and word node.root (not child))
+          by-id (when (and word node.root (not child) (not value?))
                   (accumulate [found nil _ wf (ipairs (or node.doc.workflows []))
                                &until found]
                     (when (= wf.workflowId word) wf)))]
@@ -86,8 +88,17 @@ documents without commands."
           (set result {:kind :unknown
                        : word
                        :suggestion (util.closest word
-                                                 (icollect [w (pairs node.children)]
-                                                   w))
+                                                 (doto (icollect [w (pairs node.children)]
+                                                         w)
+                                                   ;; ids run workflows at a
+                                                   ;; document's top too
+                                                   (#(when node.root
+                                                       (each [_ wf (ipairs (or node.doc.workflows
+                                                                               []))]
+                                                         (when (= (type wf.workflowId)
+                                                                  :string)
+                                                           (table.insert $
+                                                                         wf.workflowId)))))))
                        : node
                        : path})
           (do
@@ -111,7 +122,8 @@ summary or title, or a group's words."
 commands lists its workflows, by id, in its order."
   (if (and node.root (not (commands? node.doc)))
       (icollect [_ wf (ipairs (or node.doc.workflows []))]
-        {:word (tostring wf.workflowId) :summary wf.summary})
+        {:word (tostring (or wf.workflowId "(no workflowId)"))
+         :summary wf.summary})
       (let [words (icollect [w (pairs node.children)] w)]
         (table.sort words)
         (icollect [_ w (ipairs words)]
@@ -164,8 +176,8 @@ commands lists its workflows, by id, in its order."
                           ")")))
           (when (not earlier)
             (tset first-of key leaf)))))
-    (table.sort found #(< (.. $1.where ": " $1.message)
-                          (.. $2.where ": " $2.message)))
+    (table.sort found #(if (= $1.where $2.where) (< $1.message $2.message)
+                           (< $1.where $2.where)))
     found))
 
 {: resolve : entries : commands? : problems}

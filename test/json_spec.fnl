@@ -161,12 +161,12 @@
                         v ((refs.resolver {}) schema)]
                     (assert.are.equal json.null (. v.enum 2))
                     (assert.are.same [] (validate.check v json.null)))))
-            (it "survives Arazzo payloads, and a missing value in an array is null"
+            (it "survives Arazzo payloads, where a missing value in an array is left out"
                 (fn []
                   (let [v (expr.eval {:inputs {:b 2}}
                                      (json.decode "{\"tags\":[\"a\",null],\"x\":[\"$inputs.b\",\"$inputs.a\"]}"
                                                   true))]
-                    (assert.are.equal "{\"tags\":[\"a\",null],\"x\":[2,null]}"
+                    (assert.are.equal "{\"tags\":[\"a\",null],\"x\":[2]}"
                                       (json.encode v)))))
             (it "is a missing path parameter, and left out of queries"
                 (fn []

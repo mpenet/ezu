@@ -200,13 +200,14 @@ extensions; any other table is data."
 (var eval nil)
 
 (fn eval-member [ctx v]
-  "The value of an object member: an object whose members all resolve to
-nothing is nothing too, so optional inputs can fill nested objects. A
-payload, an array element and an object written as {} stay objects."
+  "The value of an object member or an array item: an object or array whose
+members or items all resolve to nothing is nothing too, so optional inputs
+can fill nested objects and lists. The payload itself, and an object or array
+written empty ({}, []), stay as they are."
   (let [value (eval ctx v)]
     (when (not (and (= (type v) :table) (not= v json.null)
-                    (not (json.array? v)) (not (selector-object? v)) (next v)
-                    (= (type value) :table) (= nil (next value))))
+                    (not (selector-object? v)) (next v) (= (type value) :table)
+                    (= nil (next value))))
       value)))
 
 (fn eval-selector [ctx obj]
@@ -237,13 +238,11 @@ and stays as is."
                 expr
                 (selector-object? expr)
                 (eval-selector ctx expr)
-                ;; arrays stay arrays, and an element that resolves to nothing is null,
-                ;; so the others keep their place
+                ;; arrays stay arrays, without the items that resolve to nothing; a
+                ;; null written as an item stays
                 (json.array? expr)
-                (json.array (fcollect [i 1 (length expr)]
-                              (match (eval ctx (. expr i))
-                                nil json.null
-                                v v)))
+                (json.array (icollect [_ item (ipairs expr)]
+                              (eval-member ctx item)))
                 (= (type expr) :table)
                 (collect [k v (pairs expr)]
                   k

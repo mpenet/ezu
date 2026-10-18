@@ -555,14 +555,27 @@
                                       :n "$inputs.n"})]
                     (assert.are.equal "{\"ids\":[1,2],\"n\":1,\"tags\":[]}"
                                       (json.encode v)))))
-            (it "keeps a whole payload, and array elements, whose members resolve to nothing"
+            (it "keeps a whole payload whose members resolve to nothing"
                 (fn []
                   (assert.are.equal "{}"
                                     (json.encode (expr.eval {:inputs {}}
                                                             {:name "$inputs.name"})))
-                  (assert.are.equal "[{}]"
+                  (assert.are.equal "[]"
                                     (json.encode (expr.eval {:inputs {}}
                                                             (json.array [{:name "$inputs.tag"}]))))))
+            (it "leaves out array items that resolve to nothing, and an array left empty"
+                (fn []
+                  (let [v (expr.eval {:inputs {:g "sg1"}}
+                                     {:items (json.array ["$inputs.a"
+                                                          "x"
+                                                          json.null
+                                                          {:name "$inputs.b"}
+                                                          {:id "$inputs.g"}])
+                                      :groups (json.array [{:id "$inputs.missing"}])
+                                      :nested (json.array [(json.array ["$inputs.a"])])
+                                      :tags (json.array [])})]
+                    (assert.are.equal "{\"items\":[\"x\",null,{\"id\":\"sg1\"}],\"tags\":[]}"
+                                      (json.encode v)))))
             (it "cuts long text between characters"
                 (fn []
                   (assert.are.equal "éé…" (expr.cut "ééé" 2))

@@ -1,0 +1,734 @@
+# Exoscale's `exo iam` commands as Arazzo workflows, mounted by
+# exoscale.arazzo.yaml: roles, API keys, the organization policy and users.
+# Roles are named by name or id, API keys by name or key, users by email or
+# id; changes wait for their job to finish and show the result. Policies are
+# JSON objects, given inline (policy='{"default-service-strategy": "allow",
+# "services": {}}'), member by member (policy.default-service-strategy=deny),
+# or from a file with --inputs @inputs.json ({"policy": {...}}).
+arazzo: 1.1.0
+info:
+  title: Exoscale IAM
+  summary: IAM roles and their policies, API keys, organization policy, users…
+  version: 1.0.0
+sourceDescriptions:
+  - name: exoscale
+    url: https://openapi-v2.exoscale.com/source.json
+    type: openapi
+  # waiting for jobs
+  - name: common
+    url: exoscale-common.arazzo.yaml
+    type: arazzo
+components:
+  inputs:
+    policy:
+      type: object
+      required: [default-service-strategy, services]
+      properties:
+        default-service-strategy:
+          type: string
+          enum: [allow, deny]
+          description: What a service not listed in services allows
+        services:
+          type: object
+          description: 'Policies by service name, each {"type": "allow"|"deny"|"rules", "rules": [...]}'
+      description: "IAM policy, a JSON object: policy='{...}', policy.MEMBER=VALUE, or --inputs @file"
+workflows:
+  - workflowId: role-id
+    summary: The id of an IAM role, given its name or id.
+    x-ezu-args: [role]
+    inputs:
+      type: object
+      required: [role]
+      properties:
+        role:
+          type: string
+          description: Role name or id
+    steps:
+      - stepId: find
+        operationId: list-iam-roles
+        successCriteria:
+          - condition: $statusCode == 200
+          - context: $response.body
+            type: jsonpath
+            condition: "$['iam-roles'][?@.name == '{$inputs.role}' || @.id == '{$inputs.role}']"
+        outputs:
+          id:
+            context: $response.body
+            type: jsonpath
+            selector: "$['iam-roles'][?@.name == '{$inputs.role}' || @.id == '{$inputs.role}'].id"
+    outputs:
+      id: $steps.find.outputs.id
+
+  - workflowId: api-key-id
+    summary: The key of an API key, which identifies it, given its name or key.
+    x-ezu-args: [api-key]
+    inputs:
+      type: object
+      required: [api-key]
+      properties:
+        api-key:
+          type: string
+          description: API key name or key
+    steps:
+      - stepId: find
+        operationId: list-api-keys
+        successCriteria:
+          - condition: $statusCode == 200
+          - context: $response.body
+            type: jsonpath
+            condition: "$['api-keys'][?@.name == '{$inputs.api-key}' || @.key == '{$inputs.api-key}']"
+        outputs:
+          id:
+            context: $response.body
+            type: jsonpath
+            selector: "$['api-keys'][?@.name == '{$inputs.api-key}' || @.key == '{$inputs.api-key}'].key"
+    outputs:
+      id: $steps.find.outputs.id
+
+  - workflowId: user-id
+    summary: The id of a user, and the user, given its email or id.
+    x-ezu-args: [user]
+    inputs:
+      type: object
+      required: [user]
+      properties:
+        user:
+          type: string
+          description: User email or id
+    steps:
+      - stepId: find
+        operationId: list-users
+        successCriteria:
+          - condition: $statusCode == 200
+          - context: $response.body
+            type: jsonpath
+            condition: "$.users[?@.email == '{$inputs.user}' || @.id == '{$inputs.user}']"
+        outputs:
+          id:
+            context: $response.body
+            type: jsonpath
+            selector: "$.users[?@.email == '{$inputs.user}' || @.id == '{$inputs.user}'].id"
+          user:
+            context: $response.body
+            type: jsonpath
+            selector: "$.users[?@.email == '{$inputs.user}' || @.id == '{$inputs.user}']"
+    outputs:
+      id: $steps.find.outputs.id
+      user: $steps.find.outputs.user
+
+  # ---- roles ----
+
+  - workflowId: role-list
+    x-ezu-command: role list
+    summary: List the IAM roles.
+    steps:
+      - stepId: list
+        operationId: list-iam-roles
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          iam-roles: $response.body#/iam-roles
+    outputs:
+      iam-roles: $steps.list.outputs.iam-roles
+
+  - workflowId: role-show
+    x-ezu-command: role show
+    summary: Show an IAM role and its policy.
+    x-ezu-args: [role]
+    inputs:
+      type: object
+      required: [role]
+      properties:
+        role:
+          type: string
+          description: Role name or id
+    steps:
+      - stepId: find
+        workflowId: role-id
+        parameters:
+          - name: role
+            value: $inputs.role
+      - stepId: show
+        operationId: get-iam-role
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          iam-role: $response.body
+    outputs:
+      iam-role: $steps.show.outputs.iam-role
+
+  - workflowId: role-create
+    x-ezu-command: role create
+    summary: Create an IAM role, allowing everything unless given a policy, wait until it exists, and show it.
+    x-ezu-args: [name]
+    inputs:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          description: Role name
+        description:
+          type: string
+          description: Role description
+        permissions:
+          type: array
+          items:
+            type: string
+            enum: [bypass-governance-retention, reset-iam-organization-policy]
+          description: Role permissions, one permissions=NAME each
+        editable:
+          type: boolean
+          description: Whether the role's policy can be changed once created
+          default: true
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+          description: Labels, as labels.KEY=VALUE
+        policy:
+          $ref: '#/components/inputs/policy'
+        max-session-ttl:
+          type: integer
+          description: Longest time, in seconds, the role can be assumed for
+    steps:
+      - stepId: create
+        operationId: create-iam-role
+        requestBody:
+          contentType: application/json
+          payload:
+            name: $inputs.name
+            description: $inputs.description
+            permissions: $inputs.permissions
+            editable: $inputs.editable
+            labels: $inputs.labels
+            policy: $inputs.policy
+            max-session-ttl: $inputs.max-session-ttl
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: created
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.create.outputs.job
+      - stepId: show
+        workflowId: role-show
+        parameters:
+          - name: role
+            value: $steps.created.outputs.reference
+    outputs:
+      iam-role: $steps.show.outputs.iam-role
+
+  - workflowId: role-update
+    x-ezu-command: role update
+    summary: Change an IAM role's description, permissions, labels or session length.
+    x-ezu-args: [role]
+    inputs:
+      type: object
+      required: [role]
+      properties:
+        role:
+          type: string
+          description: Role name or id
+        description:
+          type: string
+          description: Role description
+        permissions:
+          type: array
+          items:
+            type: string
+            enum: [bypass-governance-retention, reset-iam-organization-policy]
+          description: Role permissions, one permissions=NAME each; they replace the current ones
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+          description: Labels, as labels.KEY=VALUE; they replace the current ones
+        max-session-ttl:
+          type: integer
+          description: Longest time, in seconds, the role can be assumed for
+    steps:
+      - stepId: find
+        workflowId: role-id
+        parameters:
+          - name: role
+            value: $inputs.role
+      - stepId: update
+        operationId: update-iam-role
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            description: $inputs.description
+            permissions: $inputs.permissions
+            labels: $inputs.labels
+            max-session-ttl: $inputs.max-session-ttl
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.update.outputs.job
+      - stepId: show
+        workflowId: role-show
+        parameters:
+          - name: role
+            value: $steps.find.outputs.id
+    outputs:
+      iam-role: $steps.show.outputs.iam-role
+
+  - workflowId: role-update-policy
+    x-ezu-command: role update-policy
+    summary: Replace an IAM role's policy, and show the role.
+    x-ezu-args: [role, policy]
+    inputs:
+      type: object
+      required: [role, policy]
+      properties:
+        role:
+          type: string
+          description: Role name or id
+        policy:
+          $ref: '#/components/inputs/policy'
+    steps:
+      - stepId: find
+        workflowId: role-id
+        parameters:
+          - name: role
+            value: $inputs.role
+      - stepId: update
+        operationId: update-iam-role-policy
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload: $inputs.policy
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.update.outputs.job
+      - stepId: show
+        workflowId: role-show
+        parameters:
+          - name: role
+            value: $steps.find.outputs.id
+    outputs:
+      iam-role: $steps.show.outputs.iam-role
+
+  - workflowId: role-delete
+    x-ezu-command: role delete
+    summary: Delete an IAM role and wait until it is gone.
+    x-ezu-args: [role]
+    inputs:
+      type: object
+      required: [role]
+      properties:
+        role:
+          type: string
+          description: Role name or id
+    steps:
+      - stepId: find
+        workflowId: role-id
+        parameters:
+          - name: role
+            value: $inputs.role
+      - stepId: delete
+        operationId: delete-iam-role
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.delete.outputs.job
+    outputs:
+      deleted: $steps.find.outputs.id
+
+  - workflowId: role-assume
+    x-ezu-command: role assume
+    summary: Get a temporary API key and secret acting as an IAM role.
+    x-ezu-args: [role]
+    inputs:
+      type: object
+      required: [role, ttl]
+      properties:
+        role:
+          type: string
+          description: Role name or id
+        ttl:
+          type: integer
+          description: Lifetime of the key in seconds, at most the role's max-session-ttl
+    steps:
+      - stepId: find
+        workflowId: role-id
+        parameters:
+          - name: role
+            value: $inputs.role
+      - stepId: assume
+        operationId: assume-iam-role
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            ttl: $inputs.ttl
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          credentials: $response.body
+    outputs:
+      credentials: $steps.assume.outputs.credentials
+
+  # ---- API keys ----
+
+  - workflowId: api-key-list
+    x-ezu-command: api-key list
+    summary: List the API keys.
+    steps:
+      - stepId: list
+        operationId: list-api-keys
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          api-keys: $response.body#/api-keys
+    outputs:
+      api-keys: $steps.list.outputs.api-keys
+
+  - workflowId: api-key-show
+    x-ezu-command: api-key show
+    summary: Show an API key.
+    x-ezu-args: [api-key]
+    inputs:
+      type: object
+      required: [api-key]
+      properties:
+        api-key:
+          type: string
+          description: API key name or key
+    steps:
+      - stepId: find
+        workflowId: api-key-id
+        parameters:
+          - name: api-key
+            value: $inputs.api-key
+      - stepId: show
+        operationId: get-api-key
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          api-key: $response.body
+    outputs:
+      api-key: $steps.show.outputs.api-key
+
+  - workflowId: api-key-create
+    x-ezu-command: api-key create
+    summary: Create an API key with an IAM role, and show it with its secret, shown only this once.
+    x-ezu-args: [name, role]
+    inputs:
+      type: object
+      required: [name, role]
+      properties:
+        name:
+          type: string
+          description: API key name
+        role:
+          type: string
+          description: Name or id of the IAM role the key acts as
+    steps:
+      - stepId: role
+        workflowId: role-id
+        parameters:
+          - name: role
+            value: $inputs.role
+      - stepId: create
+        operationId: create-api-key
+        requestBody:
+          contentType: application/json
+          payload:
+            name: $inputs.name
+            role-id: $steps.role.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          api-key: $response.body
+    outputs:
+      api-key: $steps.create.outputs.api-key
+
+  - workflowId: api-key-delete
+    x-ezu-command: api-key delete
+    summary: Delete an API key and wait until it is gone.
+    x-ezu-args: [api-key]
+    inputs:
+      type: object
+      required: [api-key]
+      properties:
+        api-key:
+          type: string
+          description: API key name or key
+    steps:
+      - stepId: find
+        workflowId: api-key-id
+        parameters:
+          - name: api-key
+            value: $inputs.api-key
+      - stepId: delete
+        operationId: delete-api-key
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.delete.outputs.job
+    outputs:
+      deleted: $steps.find.outputs.id
+
+  # ---- organization policy ----
+
+  - workflowId: org-policy-show
+    x-ezu-command: org-policy show
+    summary: Show the organization's IAM policy.
+    steps:
+      - stepId: show
+        operationId: get-iam-organization-policy
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          policy: $response.body
+    outputs:
+      policy: $steps.show.outputs.policy
+
+  - workflowId: org-policy-update
+    x-ezu-command: org-policy update
+    summary: Replace the organization's IAM policy, and show it.
+    x-ezu-args: [policy]
+    inputs:
+      type: object
+      required: [policy]
+      properties:
+        policy:
+          $ref: '#/components/inputs/policy'
+    steps:
+      - stepId: update
+        operationId: update-iam-organization-policy
+        requestBody:
+          contentType: application/json
+          payload: $inputs.policy
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.update.outputs.job
+      - stepId: show
+        workflowId: org-policy-show
+    outputs:
+      policy: $steps.show.outputs.policy
+
+  - workflowId: org-policy-reset
+    x-ezu-command: org-policy reset
+    summary: Reset the organization's IAM policy to allow everything, and show it.
+    steps:
+      - stepId: reset
+        operationId: reset-iam-organization-policy
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.reset.outputs.job
+      - stepId: show
+        workflowId: org-policy-show
+    outputs:
+      policy: $steps.show.outputs.policy
+
+  # ---- users ----
+
+  - workflowId: user-list
+    x-ezu-command: user list
+    summary: List the organization's users.
+    steps:
+      - stepId: list
+        operationId: list-users
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          users: $response.body#/users
+    outputs:
+      users: $steps.list.outputs.users
+
+  - workflowId: user-create
+    x-ezu-command: user create
+    summary: Invite a user with an IAM role, wait until it is done, and show the user.
+    x-ezu-args: [email, role]
+    inputs:
+      type: object
+      required: [email, role]
+      properties:
+        email:
+          type: string
+          description: Email address to invite
+        role:
+          type: string
+          description: Name or id of the user's IAM role
+    steps:
+      - stepId: role
+        workflowId: role-id
+        parameters:
+          - name: role
+            value: $inputs.role
+      - stepId: create
+        operationId: create-user
+        requestBody:
+          contentType: application/json
+          payload:
+            email: $inputs.email
+            role:
+              id: $steps.role.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: created
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.create.outputs.job
+      - stepId: show
+        workflowId: user-id
+        parameters:
+          - name: user
+            value: $steps.created.outputs.reference
+    outputs:
+      user: $steps.show.outputs.user
+
+  - workflowId: user-update-role
+    x-ezu-command: user update-role
+    summary: Give a user another IAM role, and show the user.
+    x-ezu-args: [user, role]
+    inputs:
+      type: object
+      required: [user, role]
+      properties:
+        user:
+          type: string
+          description: User email or id
+        role:
+          type: string
+          description: Name or id of the user's new IAM role
+    steps:
+      - stepId: find
+        workflowId: user-id
+        parameters:
+          - name: user
+            value: $inputs.user
+      - stepId: role
+        workflowId: role-id
+        parameters:
+          - name: role
+            value: $inputs.role
+      - stepId: update
+        operationId: update-user-role
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            role:
+              id: $steps.role.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.update.outputs.job
+      - stepId: show
+        workflowId: user-id
+        parameters:
+          - name: user
+            value: $steps.find.outputs.id
+    outputs:
+      user: $steps.show.outputs.user
+
+  - workflowId: user-delete
+    x-ezu-command: user delete
+    summary: Remove a user from the organization and wait until it is done.
+    x-ezu-args: [user]
+    inputs:
+      type: object
+      required: [user]
+      properties:
+        user:
+          type: string
+          description: User email or id
+    steps:
+      - stepId: find
+        workflowId: user-id
+        parameters:
+          - name: user
+            value: $inputs.user
+      - stepId: delete
+        operationId: delete-user
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.delete.outputs.job
+    outputs:
+      deleted: $steps.find.outputs.id

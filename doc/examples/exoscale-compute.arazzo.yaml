@@ -14,6 +14,11 @@ sourceDescriptions:
   - name: common
     url: exoscale-common.arazzo.yaml
     type: arazzo
+  # exo compute sks
+  - name: sks
+    url: exoscale-sks.arazzo.yaml
+    type: arazzo
+    x-ezu-command: sks
 workflows:
   # ---- instances ----
 
@@ -865,6 +870,63 @@ workflows:
     outputs:
       instance: $steps.show.outputs.instance
 
+  - workflowId: instance-private-network-update-ip
+    x-ezu-command: instance private-network update-ip
+    summary: Change the address of an instance on a managed private network.
+    x-ezu-args: [instance, private-network]
+    inputs:
+      type: object
+      required: [instance, private-network]
+      properties:
+        instance:
+          type: string
+          description: Instance name or id
+        private-network:
+          type: string
+          description: Private network name or id
+        ip:
+          type: string
+          description: Address to give the instance; a free one by default
+    steps:
+      - stepId: find
+        workflowId: $sourceDescriptions.common.instance-id
+        parameters:
+          - name: instance
+            value: $inputs.instance
+      - stepId: network
+        workflowId: $sourceDescriptions.common.private-network-id
+        parameters:
+          - name: private-network
+            value: $inputs.private-network
+      - stepId: update
+        operationId: update-private-network-instance-ip
+        parameters:
+          - name: id
+            in: path
+            value: $steps.network.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            instance:
+              id: $steps.find.outputs.id
+            ip: $inputs.ip
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.update.outputs.job
+      - stepId: show
+        workflowId: instance-show
+        parameters:
+          - name: instance
+            value: $steps.find.outputs.id
+    outputs:
+      instance: $steps.show.outputs.instance
+
   - workflowId: instance-elastic-ip-attach
     x-ezu-command: instance elastic-ip attach
     summary: Attach an elastic IP to an instance.
@@ -970,6 +1032,313 @@ workflows:
             value: $steps.find.outputs.id
     outputs:
       instance: $steps.show.outputs.instance
+
+  - workflowId: instance-protection-add
+    x-ezu-command: instance protection add
+    summary: Protect an instance from deletion.
+    x-ezu-args: [instance]
+    inputs:
+      type: object
+      required: [instance]
+      properties:
+        instance:
+          type: string
+          description: Instance name or id
+    steps:
+      - stepId: find
+        workflowId: $sourceDescriptions.common.instance-id
+        parameters:
+          - name: instance
+            value: $inputs.instance
+      - stepId: protect
+        operationId: add-instance-protection
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.protect.outputs.job
+      - stepId: show
+        workflowId: instance-show
+        parameters:
+          - name: instance
+            value: $steps.find.outputs.id
+    outputs:
+      instance: $steps.show.outputs.instance
+
+  - workflowId: instance-protection-remove
+    x-ezu-command: instance protection remove
+    summary: Remove an instance's protection from deletion.
+    x-ezu-args: [instance]
+    inputs:
+      type: object
+      required: [instance]
+      properties:
+        instance:
+          type: string
+          description: Instance name or id
+    steps:
+      - stepId: find
+        workflowId: $sourceDescriptions.common.instance-id
+        parameters:
+          - name: instance
+            value: $inputs.instance
+      - stepId: unprotect
+        operationId: remove-instance-protection
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.unprotect.outputs.job
+      - stepId: show
+        workflowId: instance-show
+        parameters:
+          - name: instance
+            value: $steps.find.outputs.id
+    outputs:
+      instance: $steps.show.outputs.instance
+
+  - workflowId: instance-console-url
+    x-ezu-command: instance console-url
+    summary: Show the address of an instance's console.
+    x-ezu-args: [instance]
+    inputs:
+      type: object
+      required: [instance]
+      properties:
+        instance:
+          type: string
+          description: Instance name or id
+    steps:
+      - stepId: find
+        workflowId: $sourceDescriptions.common.instance-id
+        parameters:
+          - name: instance
+            value: $inputs.instance
+      - stepId: console
+        operationId: get-console-proxy-url
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          url: $response.body#/url
+    outputs:
+      url: $steps.console.outputs.url
+
+  - workflowId: instance-reset-password
+    x-ezu-command: instance reset-password
+    summary: Give an instance a new password, and show it.
+    x-ezu-args: [instance]
+    inputs:
+      type: object
+      required: [instance]
+      properties:
+        instance:
+          type: string
+          description: Instance name or id
+    steps:
+      - stepId: find
+        workflowId: $sourceDescriptions.common.instance-id
+        parameters:
+          - name: instance
+            value: $inputs.instance
+      - stepId: reset
+        operationId: reset-instance-password
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.reset.outputs.job
+      - stepId: reveal
+        operationId: reveal-instance-password
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          password: $response.body#/password
+    outputs:
+      password: $steps.reveal.outputs.password
+
+  - workflowId: instance-enable-tpm
+    x-ezu-command: instance enable-tpm
+    summary: Give an instance a TPM (Trusted Platform Module); this can't be undone.
+    x-ezu-args: [instance]
+    inputs:
+      type: object
+      required: [instance]
+      properties:
+        instance:
+          type: string
+          description: Instance name or id
+    steps:
+      - stepId: find
+        workflowId: $sourceDescriptions.common.instance-id
+        parameters:
+          - name: instance
+            value: $inputs.instance
+      - stepId: enable
+        operationId: enable-tpm
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.enable.outputs.job
+      - stepId: show
+        workflowId: instance-show
+        parameters:
+          - name: instance
+            value: $steps.find.outputs.id
+    outputs:
+      instance: $steps.show.outputs.instance
+
+  - workflowId: instance-reverse-dns-show
+    x-ezu-command: instance reverse-dns show
+    summary: Show the domain name an instance's IP address resolves to.
+    x-ezu-args: [instance]
+    inputs:
+      type: object
+      required: [instance]
+      properties:
+        instance:
+          type: string
+          description: Instance name or id
+    steps:
+      - stepId: find
+        workflowId: $sourceDescriptions.common.instance-id
+        parameters:
+          - name: instance
+            value: $inputs.instance
+      - stepId: show
+        operationId: get-reverse-dns-instance
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          domain-name: $response.body#/domain-name
+    outputs:
+      domain-name: $steps.show.outputs.domain-name
+
+  - workflowId: instance-reverse-dns-update
+    x-ezu-command: instance reverse-dns update
+    summary: Set the domain name an instance's IP address resolves to.
+    x-ezu-args: [instance, domain-name]
+    inputs:
+      type: object
+      required: [instance, domain-name]
+      properties:
+        instance:
+          type: string
+          description: Instance name or id
+        domain-name:
+          type: string
+          description: Domain name, as www.example.net
+    steps:
+      - stepId: find
+        workflowId: $sourceDescriptions.common.instance-id
+        parameters:
+          - name: instance
+            value: $inputs.instance
+      - stepId: update
+        operationId: update-reverse-dns-instance
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            domain-name: $inputs.domain-name
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.update.outputs.job
+      - stepId: show
+        workflowId: instance-reverse-dns-show
+        parameters:
+          - name: instance
+            value: $steps.find.outputs.id
+    outputs:
+      domain-name: $steps.show.outputs.domain-name
+
+  - workflowId: instance-reverse-dns-delete
+    x-ezu-command: instance reverse-dns delete
+    summary: Remove the domain name an instance's IP address resolves to.
+    x-ezu-args: [instance]
+    inputs:
+      type: object
+      required: [instance]
+      properties:
+        instance:
+          type: string
+          description: Instance name or id
+    steps:
+      - stepId: find
+        workflowId: $sourceDescriptions.common.instance-id
+        parameters:
+          - name: instance
+            value: $inputs.instance
+      - stepId: delete
+        operationId: delete-reverse-dns-instance
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.delete.outputs.job
+    outputs:
+      deleted: $steps.find.outputs.id
 
   # ---- instance snapshots ----
 
@@ -1163,6 +1532,68 @@ workflows:
     outputs:
       export: $steps.show.outputs.snapshot#/export
 
+  - workflowId: instance-snapshot-promote
+    x-ezu-command: instance snapshot promote
+    summary: Make a template of an instance snapshot, and show it.
+    x-ezu-args: [id, name]
+    inputs:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          description: Snapshot id
+        name:
+          type: string
+          description: Template name
+        description:
+          type: string
+          description: Template description
+        default-user:
+          type: string
+          description: User to log in as
+        ssh-key-enabled:
+          type: boolean
+          description: Whether instances get an SSH key
+          default: true
+        password-enabled:
+          type: boolean
+          description: Whether instances get a password
+          default: true
+    steps:
+      - stepId: promote
+        operationId: promote-snapshot-to-template
+        parameters:
+          - name: id
+            in: path
+            value: $inputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            name: $inputs.name
+            description: $inputs.description
+            default-user: $inputs.default-user
+            ssh-key-enabled: $inputs.ssh-key-enabled
+            password-enabled: $inputs.password-enabled
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.promote.outputs.job
+      - stepId: show
+        workflowId: template-show
+        parameters:
+          - name: template
+            value: $steps.done.outputs.reference
+          - name: visibility
+            value: private
+    outputs:
+      template: $steps.show.outputs.template
+
   # ---- instance types ----
 
   - workflowId: instance-type-list
@@ -1301,21 +1732,10 @@ workflows:
           description: Template name or id
     steps:
       - stepId: find
-        operationId: list-templates
+        workflowId: private-template-id
         parameters:
-          - name: visibility
-            in: query
-            value: private
-        successCriteria:
-          - condition: $statusCode == 200
-          - context: $response.body
-            type: jsonpath
-            condition: "$.templates[?@.name == '{$inputs.template}' || @.id == '{$inputs.template}']"
-        outputs:
-          id:
-            context: $response.body
-            type: jsonpath
-            selector: "$.templates[?@.name == '{$inputs.template}' || @.id == '{$inputs.template}'].id"
+          - name: template
+            value: $inputs.template
       - stepId: delete
         operationId: delete-template
         parameters:
@@ -1333,6 +1753,214 @@ workflows:
             value: $steps.delete.outputs.job
     outputs:
       deleted: $steps.find.outputs.id
+
+  - workflowId: template-register
+    x-ezu-command: template register
+    summary: Register a template from a disk image, and show it.
+    x-ezu-args: [name, url, checksum]
+    inputs:
+      type: object
+      required: [name, url, checksum]
+      properties:
+        name:
+          type: string
+          description: Template name
+        url:
+          type: string
+          description: Address of the disk image (QCOW2)
+        checksum:
+          type: string
+          description: MD5 checksum of the disk image
+        description:
+          type: string
+          description: Template description
+        default-user:
+          type: string
+          description: User to log in as
+        ssh-key-enabled:
+          type: boolean
+          description: Whether instances get an SSH key
+          default: true
+        password-enabled:
+          type: boolean
+          description: Whether instances get a password
+          default: true
+        boot-mode:
+          type: string
+          enum: [legacy, uefi]
+          description: Boot mode
+          default: legacy
+        build:
+          type: string
+          description: Template build
+        version:
+          type: string
+          description: Template version
+        maintainer:
+          type: string
+          description: Template maintainer
+    steps:
+      - stepId: register
+        operationId: register-template
+        requestBody:
+          contentType: application/json
+          payload:
+            name: $inputs.name
+            url: $inputs.url
+            checksum: $inputs.checksum
+            description: $inputs.description
+            default-user: $inputs.default-user
+            ssh-key-enabled: $inputs.ssh-key-enabled
+            password-enabled: $inputs.password-enabled
+            boot-mode: $inputs.boot-mode
+            build: $inputs.build
+            version: $inputs.version
+            maintainer: $inputs.maintainer
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.register.outputs.job
+      - stepId: show
+        workflowId: template-show
+        parameters:
+          - name: template
+            value: $steps.done.outputs.reference
+          - name: visibility
+            value: private
+    outputs:
+      template: $steps.show.outputs.template
+
+  - workflowId: template-update
+    x-ezu-command: template update
+    summary: Rename one of your templates or change its description.
+    x-ezu-args: [template]
+    inputs:
+      type: object
+      required: [template]
+      properties:
+        template:
+          type: string
+          description: Template name or id
+        name:
+          type: string
+          description: New name
+        description:
+          type: string
+          description: Description
+    steps:
+      - stepId: find
+        workflowId: private-template-id
+        parameters:
+          - name: template
+            value: $inputs.template
+      - stepId: update
+        operationId: update-template
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            name: $inputs.name
+            description: $inputs.description
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.update.outputs.job
+      - stepId: show
+        workflowId: template-show
+        parameters:
+          - name: template
+            value: $steps.find.outputs.id
+          - name: visibility
+            value: private
+    outputs:
+      template: $steps.show.outputs.template
+
+  - workflowId: template-copy
+    x-ezu-command: template copy
+    summary: Copy one of your templates to another zone, and give the copy's id.
+    x-ezu-args: [template, zone]
+    inputs:
+      type: object
+      required: [template, zone]
+      properties:
+        template:
+          type: string
+          description: Template name or id
+        zone:
+          type: string
+          enum: [ch-dk-2, de-muc-1, ch-gva-2, at-vie-1, de-fra-1, bg-sof-1, at-vie-2, hr-zag-1]
+          description: Zone to copy the template to
+    steps:
+      - stepId: find
+        workflowId: private-template-id
+        parameters:
+          - name: template
+            value: $inputs.template
+      - stepId: copy
+        operationId: copy-template
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            target-zone:
+              name: $inputs.zone
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.copy.outputs.job
+    outputs:
+      copy: $steps.done.outputs.reference
+
+  - workflowId: private-template-id
+    summary: The id of one of your templates, given its name or id.
+    x-ezu-args: [template]
+    inputs:
+      type: object
+      required: [template]
+      properties:
+        template:
+          type: string
+          description: Template name or id
+    steps:
+      - stepId: find
+        operationId: list-templates
+        parameters:
+          - name: visibility
+            in: query
+            value: private
+        successCriteria:
+          - condition: $statusCode == 200
+          - context: $response.body
+            type: jsonpath
+            condition: "$.templates[?@.name == '{$inputs.template}' || @.id == '{$inputs.template}']"
+        outputs:
+          id:
+            context: $response.body
+            type: jsonpath
+            selector: "$.templates[?@.name == '{$inputs.template}' || @.id == '{$inputs.template}'].id"
+    outputs:
+      id: $steps.find.outputs.id
 
   # ---- SSH keys ----
 
@@ -1939,6 +2567,209 @@ workflows:
     outputs:
       deleted: $steps.find.outputs.id
 
+  - workflowId: elastic-ip-update
+    x-ezu-command: elastic-ip update
+    summary: Change an elastic IP's description, labels or health check.
+    x-ezu-args: [elastic-ip]
+    inputs:
+      type: object
+      required: [elastic-ip]
+      properties:
+        elastic-ip:
+          type: string
+          description: Elastic IP address or id
+        description:
+          type: string
+          description: Description
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+          description: Labels, as labels.KEY=VALUE; they replace the current ones
+        healthcheck-mode:
+          type: string
+          enum: [tcp, http, https]
+          description: Health check mode; makes the elastic IP managed
+        healthcheck-port:
+          type: integer
+          description: Health check port
+        healthcheck-uri:
+          type: string
+          description: Health check URI, required in http(s) mode
+        healthcheck-interval:
+          type: integer
+          description: Seconds between checks
+        healthcheck-timeout:
+          type: integer
+          description: Health check timeout, in seconds
+        healthcheck-strikes-ok:
+          type: integer
+          description: Successful checks before a target is healthy
+        healthcheck-strikes-fail:
+          type: integer
+          description: Failed checks before a target is unhealthy
+        healthcheck-tls-sni:
+          type: string
+          description: Server name to present with SNI, in https mode
+        healthcheck-tls-skip-verify:
+          type: boolean
+          description: Skip verifying the certificate, in https mode
+    steps:
+      - stepId: find
+        workflowId: $sourceDescriptions.common.elastic-ip-id
+        parameters:
+          - name: elastic-ip
+            value: $inputs.elastic-ip
+      - stepId: update
+        operationId: update-elastic-ip
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            description: $inputs.description
+            labels: $inputs.labels
+            healthcheck:
+              mode: $inputs.healthcheck-mode
+              port: $inputs.healthcheck-port
+              uri: $inputs.healthcheck-uri
+              interval: $inputs.healthcheck-interval
+              timeout: $inputs.healthcheck-timeout
+              strikes-ok: $inputs.healthcheck-strikes-ok
+              strikes-fail: $inputs.healthcheck-strikes-fail
+              tls-sni: $inputs.healthcheck-tls-sni
+              tls-skip-verify: $inputs.healthcheck-tls-skip-verify
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.update.outputs.job
+      - stepId: show
+        workflowId: elastic-ip-show
+        parameters:
+          - name: elastic-ip
+            value: $steps.find.outputs.id
+    outputs:
+      elastic-ip: $steps.show.outputs.elastic-ip
+
+  - workflowId: elastic-ip-reverse-dns-show
+    x-ezu-command: elastic-ip reverse-dns show
+    summary: Show the domain name an elastic IP resolves to.
+    x-ezu-args: [elastic-ip]
+    inputs:
+      type: object
+      required: [elastic-ip]
+      properties:
+        elastic-ip:
+          type: string
+          description: Elastic IP address or id
+    steps:
+      - stepId: find
+        workflowId: $sourceDescriptions.common.elastic-ip-id
+        parameters:
+          - name: elastic-ip
+            value: $inputs.elastic-ip
+      - stepId: show
+        operationId: get-reverse-dns-elastic-ip
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          domain-name: $response.body#/domain-name
+    outputs:
+      domain-name: $steps.show.outputs.domain-name
+
+  - workflowId: elastic-ip-reverse-dns-update
+    x-ezu-command: elastic-ip reverse-dns update
+    summary: Set the domain name an elastic IP resolves to.
+    x-ezu-args: [elastic-ip, domain-name]
+    inputs:
+      type: object
+      required: [elastic-ip, domain-name]
+      properties:
+        elastic-ip:
+          type: string
+          description: Elastic IP address or id
+        domain-name:
+          type: string
+          description: Domain name, as www.example.net
+    steps:
+      - stepId: find
+        workflowId: $sourceDescriptions.common.elastic-ip-id
+        parameters:
+          - name: elastic-ip
+            value: $inputs.elastic-ip
+      - stepId: update
+        operationId: update-reverse-dns-elastic-ip
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            domain-name: $inputs.domain-name
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.update.outputs.job
+      - stepId: show
+        workflowId: elastic-ip-reverse-dns-show
+        parameters:
+          - name: elastic-ip
+            value: $steps.find.outputs.id
+    outputs:
+      domain-name: $steps.show.outputs.domain-name
+
+  - workflowId: elastic-ip-reverse-dns-delete
+    x-ezu-command: elastic-ip reverse-dns delete
+    summary: Remove the domain name an elastic IP resolves to.
+    x-ezu-args: [elastic-ip]
+    inputs:
+      type: object
+      required: [elastic-ip]
+      properties:
+        elastic-ip:
+          type: string
+          description: Elastic IP address or id
+    steps:
+      - stepId: find
+        workflowId: $sourceDescriptions.common.elastic-ip-id
+        parameters:
+          - name: elastic-ip
+            value: $inputs.elastic-ip
+      - stepId: delete
+        operationId: delete-reverse-dns-elastic-ip
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.delete.outputs.job
+    outputs:
+      deleted: $steps.find.outputs.id
+
   # ---- private networks ----
 
   - workflowId: private-network-list
@@ -2075,6 +2906,100 @@ workflows:
             value: $steps.delete.outputs.job
     outputs:
       deleted: $steps.find.outputs.id
+
+  - workflowId: private-network-update
+    x-ezu-command: private-network update
+    summary: Change a private network's name, description, range, labels or DHCP options.
+    x-ezu-args: [private-network]
+    inputs:
+      type: object
+      required: [private-network]
+      properties:
+        private-network:
+          type: string
+          description: Private network name or id
+        name:
+          type: string
+          description: New name
+        description:
+          type: string
+          description: Description
+        start-ip:
+          type: string
+          description: First address of a managed network's range
+        end-ip:
+          type: string
+          description: Last address of a managed network's range
+        netmask:
+          type: string
+          description: Netmask of a managed network
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+          description: Labels, as labels.KEY=VALUE; they replace the current ones
+        dns-server:
+          type: array
+          items:
+            type: string
+          description: DNS servers handed out by DHCP (repeat for several)
+        ntp-server:
+          type: array
+          items:
+            type: string
+          description: NTP servers handed out by DHCP (repeat for several)
+        router:
+          type: array
+          items:
+            type: string
+          description: Routers handed out by DHCP (repeat for several)
+        domain-search:
+          type: array
+          items:
+            type: string
+          description: Domain search list handed out by DHCP (repeat for several)
+    steps:
+      - stepId: find
+        workflowId: $sourceDescriptions.common.private-network-id
+        parameters:
+          - name: private-network
+            value: $inputs.private-network
+      - stepId: update
+        operationId: update-private-network
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            name: $inputs.name
+            description: $inputs.description
+            start-ip: $inputs.start-ip
+            end-ip: $inputs.end-ip
+            netmask: $inputs.netmask
+            labels: $inputs.labels
+            options:
+              dns-servers: $inputs.dns-server
+              ntp-servers: $inputs.ntp-server
+              routers: $inputs.router
+              domain-search: $inputs.domain-search
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.update.outputs.job
+      - stepId: show
+        workflowId: private-network-show
+        parameters:
+          - name: private-network
+            value: $steps.find.outputs.id
+    outputs:
+      private-network: $steps.show.outputs.private-network
 
   # ---- anti-affinity groups ----
 
@@ -2223,6 +3148,35 @@ workflows:
           description: Deploy target name or id
     steps:
       - stepId: find
+        workflowId: deploy-target-id
+        parameters:
+          - name: deploy-target
+            value: $inputs.deploy-target
+      - stepId: show
+        operationId: get-deploy-target
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          deploy-target: $response.body
+    outputs:
+      deploy-target: $steps.show.outputs.deploy-target
+
+  - workflowId: deploy-target-id
+    summary: The id of a deploy target, given its name or id.
+    x-ezu-args: [deploy-target]
+    inputs:
+      type: object
+      required: [deploy-target]
+      properties:
+        deploy-target:
+          type: string
+          description: Deploy target name or id
+    steps:
+      - stepId: find
         operationId: list-deploy-targets
         successCriteria:
           - condition: $statusCode == 200
@@ -2230,12 +3184,12 @@ workflows:
             type: jsonpath
             condition: "$['deploy-targets'][?@.name == '{$inputs.deploy-target}' || @.id == '{$inputs.deploy-target}']"
         outputs:
-          deploy-target:
+          id:
             context: $response.body
             type: jsonpath
-            selector: "$['deploy-targets'][?@.name == '{$inputs.deploy-target}' || @.id == '{$inputs.deploy-target}']"
+            selector: "$['deploy-targets'][?@.name == '{$inputs.deploy-target}' || @.id == '{$inputs.deploy-target}'].id"
     outputs:
-      deploy-target: $steps.find.outputs.deploy-target
+      id: $steps.find.outputs.id
 
   # ---- block storage ----
 
@@ -2454,3 +3408,1926 @@ workflows:
             value: $steps.find.outputs.id
     outputs:
       volume: $steps.show.outputs.volume
+
+  - workflowId: block-storage-update
+    x-ezu-command: block-storage update
+    summary: Rename a block storage volume, change its labels, or grow it.
+    x-ezu-args: [volume]
+    inputs:
+      type: object
+      required: [volume]
+      properties:
+        volume:
+          type: string
+          description: Volume name or id
+        name:
+          type: string
+          description: New name
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+          description: Labels, as labels.KEY=VALUE; they replace the current ones
+        size:
+          type: integer
+          description: New size in GiB, larger than the current one
+    steps:
+      - stepId: find
+        workflowId: $sourceDescriptions.common.block-storage-id
+        parameters:
+          - name: volume
+            value: $inputs.volume
+        onSuccess:
+          - name: resize-only
+            type: goto
+            stepId: resize
+            criteria:
+              - condition: $inputs.name == null && $inputs.labels == null && $inputs.size != null
+      - stepId: update
+        operationId: update-block-storage-volume
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            name: $inputs.name
+            labels: $inputs.labels
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.update.outputs.job
+        onSuccess:
+          - name: same-size
+            type: goto
+            stepId: show
+            criteria:
+              - condition: $inputs.size == null
+      - stepId: resize
+        operationId: resize-block-storage-volume
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            size: $inputs.size
+        successCriteria:
+          - condition: $statusCode == 200
+      - stepId: show
+        workflowId: block-storage-show
+        parameters:
+          - name: volume
+            value: $steps.find.outputs.id
+    outputs:
+      volume: $steps.show.outputs.volume
+
+  # ---- block storage snapshots ----
+
+  - workflowId: block-storage-snapshot-list
+    x-ezu-command: block-storage snapshot list
+    summary: List block storage snapshots.
+    steps:
+      - stepId: list
+        operationId: list-block-storage-snapshots
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          snapshots: $response.body#/block-storage-snapshots
+    outputs:
+      snapshots: $steps.list.outputs.snapshots
+
+  - workflowId: block-storage-snapshot-show
+    x-ezu-command: block-storage snapshot show
+    summary: Show a block storage snapshot.
+    x-ezu-args: [snapshot]
+    inputs:
+      type: object
+      required: [snapshot]
+      properties:
+        snapshot:
+          type: string
+          description: Snapshot name or id
+    steps:
+      - stepId: find
+        workflowId: block-storage-snapshot-id
+        parameters:
+          - name: snapshot
+            value: $inputs.snapshot
+      - stepId: show
+        operationId: get-block-storage-snapshot
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          snapshot: $response.body
+    outputs:
+      snapshot: $steps.show.outputs.snapshot
+
+  - workflowId: block-storage-snapshot-create
+    x-ezu-command: block-storage snapshot create
+    summary: Snapshot a block storage volume.
+    x-ezu-args: [volume]
+    inputs:
+      type: object
+      required: [volume]
+      properties:
+        volume:
+          type: string
+          description: Volume name or id
+        name:
+          type: string
+          description: Snapshot name
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+          description: Labels, as labels.KEY=VALUE
+    steps:
+      - stepId: find
+        workflowId: $sourceDescriptions.common.block-storage-id
+        parameters:
+          - name: volume
+            value: $inputs.volume
+      - stepId: create
+        operationId: create-block-storage-snapshot
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            name: $inputs.name
+            labels: $inputs.labels
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.create.outputs.job
+      - stepId: show
+        workflowId: block-storage-snapshot-show
+        parameters:
+          - name: snapshot
+            value: $steps.done.outputs.reference
+    outputs:
+      snapshot: $steps.show.outputs.snapshot
+
+  - workflowId: block-storage-snapshot-update
+    x-ezu-command: block-storage snapshot update
+    summary: Rename a block storage snapshot or change its labels.
+    x-ezu-args: [snapshot]
+    inputs:
+      type: object
+      required: [snapshot]
+      properties:
+        snapshot:
+          type: string
+          description: Snapshot name or id
+        name:
+          type: string
+          description: New name
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+          description: Labels, as labels.KEY=VALUE; they replace the current ones
+    steps:
+      - stepId: find
+        workflowId: block-storage-snapshot-id
+        parameters:
+          - name: snapshot
+            value: $inputs.snapshot
+      - stepId: update
+        operationId: update-block-storage-snapshot
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            name: $inputs.name
+            labels: $inputs.labels
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.update.outputs.job
+      - stepId: show
+        workflowId: block-storage-snapshot-show
+        parameters:
+          - name: snapshot
+            value: $steps.find.outputs.id
+    outputs:
+      snapshot: $steps.show.outputs.snapshot
+
+  - workflowId: block-storage-snapshot-delete
+    x-ezu-command: block-storage snapshot delete
+    summary: Delete a block storage snapshot.
+    x-ezu-args: [snapshot]
+    inputs:
+      type: object
+      required: [snapshot]
+      properties:
+        snapshot:
+          type: string
+          description: Snapshot name or id
+    steps:
+      - stepId: find
+        workflowId: block-storage-snapshot-id
+        parameters:
+          - name: snapshot
+            value: $inputs.snapshot
+      - stepId: delete
+        operationId: delete-block-storage-snapshot
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.delete.outputs.job
+    outputs:
+      deleted: $steps.find.outputs.id
+
+  - workflowId: block-storage-snapshot-id
+    summary: The id of a block storage snapshot, given its name or id.
+    x-ezu-args: [snapshot]
+    inputs:
+      type: object
+      required: [snapshot]
+      properties:
+        snapshot:
+          type: string
+          description: Snapshot name or id
+    steps:
+      - stepId: find
+        operationId: list-block-storage-snapshots
+        successCriteria:
+          - condition: $statusCode == 200
+          - context: $response.body
+            type: jsonpath
+            condition: "$['block-storage-snapshots'][?@.name == '{$inputs.snapshot}' || @.id == '{$inputs.snapshot}']"
+        outputs:
+          id:
+            context: $response.body
+            type: jsonpath
+            selector: "$['block-storage-snapshots'][?@.name == '{$inputs.snapshot}' || @.id == '{$inputs.snapshot}'].id"
+    outputs:
+      id: $steps.find.outputs.id
+
+  # ---- instance pools ----
+
+  - workflowId: instance-pool-list
+    x-ezu-command: instance-pool list
+    summary: List instance pools.
+    steps:
+      - stepId: list
+        operationId: list-instance-pools
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          instance-pools: $response.body#/instance-pools
+    outputs:
+      instance-pools: $steps.list.outputs.instance-pools
+
+  - workflowId: instance-pool-show
+    x-ezu-command: instance-pool show
+    summary: Show an instance pool and its instances.
+    x-ezu-args: [instance-pool]
+    inputs:
+      type: object
+      required: [instance-pool]
+      properties:
+        instance-pool:
+          type: string
+          description: Instance pool name or id
+    steps:
+      - stepId: find
+        workflowId: instance-pool-id
+        parameters:
+          - name: instance-pool
+            value: $inputs.instance-pool
+      - stepId: show
+        operationId: get-instance-pool
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          instance-pool: $response.body
+    outputs:
+      instance-pool: $steps.show.outputs.instance-pool
+
+  # The pool is created empty, so that its security group, anti-affinity
+  # group and private network (each optional) are set before it is scaled
+  # to its size and its instances are created.
+  - workflowId: instance-pool-create
+    x-ezu-command: instance-pool create
+    summary: Create an instance pool, wait until its instances exist, and show it.
+    x-ezu-args: [name]
+    inputs:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          description: Instance pool name
+        size:
+          type: integer
+          description: Number of instances
+          default: 1
+        description:
+          type: string
+          description: Description
+        template:
+          type: string
+          description: Template name or id
+          default: Linux Ubuntu 24.04 LTS 64-bit
+        template-visibility:
+          type: string
+          enum: [public, private]
+          description: Where to look for the template
+          default: public
+        family:
+          type: string
+          description: Instance type family (standard, cpu, memory…)
+          default: standard
+        instance-size:
+          type: string
+          description: Instance type size (micro, small, medium, large…)
+          default: medium
+        disk-size:
+          type: integer
+          description: Disk size in GiB
+          default: 50
+        ssh-key:
+          type: string
+          description: Name of an SSH key to deploy on the instances
+        instance-prefix:
+          type: string
+          description: Prefix of the instances' names
+        public-ip:
+          type: string
+          enum: [inet4, dual, none]
+          description: Public IP addresses to assign
+        ipv6:
+          type: boolean
+          description: Give the instances IPv6 addresses
+        min-available:
+          type: integer
+          description: Minimum number of running instances
+        security-group:
+          type: string
+          description: Name or id of a security group for the instances
+        anti-affinity-group:
+          type: string
+          description: Name or id of an anti-affinity group for the instances
+        private-network:
+          type: string
+          description: Name or id of a private network to attach the instances to
+        deploy-target:
+          type: string
+          description: Name or id of a deploy target for the instances
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+          description: Labels, as labels.KEY=VALUE
+        user-data:
+          type: string
+          description: Cloud-init user data, base64-encoded
+    steps:
+      - stepId: template
+        operationId: list-templates
+        parameters:
+          - name: visibility
+            in: query
+            value: $inputs.template-visibility
+        successCriteria:
+          - condition: $statusCode == 200
+          - context: $response.body
+            type: jsonpath
+            condition: "$.templates[?@.name == '{$inputs.template}' || @.id == '{$inputs.template}']"
+        outputs:
+          id:
+            context: $response.body
+            type: jsonpath
+            selector: "$.templates[?@.name == '{$inputs.template}' || @.id == '{$inputs.template}'].id"
+      - stepId: instance-type
+        operationId: list-instance-types
+        successCriteria:
+          - condition: $statusCode == 200
+          - context: $response.body
+            type: jsonpath
+            condition: "$['instance-types'][?@.family == '{$inputs.family}' && @.size == '{$inputs.instance-size}']"
+        outputs:
+          id:
+            context: $response.body
+            type: jsonpath
+            selector: "$['instance-types'][?@.family == '{$inputs.family}' && @.size == '{$inputs.instance-size}'].id"
+        onSuccess:
+          - name: skip-to-create
+            type: goto
+            stepId: create
+            criteria:
+              - condition: $inputs.deploy-target == null && $inputs.security-group == null && $inputs.anti-affinity-group == null && $inputs.private-network == null
+          - name: skip-to-private-network
+            type: goto
+            stepId: private-network
+            criteria:
+              - condition: $inputs.deploy-target == null && $inputs.security-group == null && $inputs.anti-affinity-group == null
+          - name: skip-to-anti-affinity-group
+            type: goto
+            stepId: anti-affinity-group
+            criteria:
+              - condition: $inputs.deploy-target == null && $inputs.security-group == null
+          - name: skip-to-security-group
+            type: goto
+            stepId: security-group
+            criteria:
+              - condition: $inputs.deploy-target == null
+      - stepId: deploy-target
+        workflowId: deploy-target-id
+        parameters:
+          - name: deploy-target
+            value: $inputs.deploy-target
+        onSuccess:
+          - name: skip-to-create
+            type: goto
+            stepId: create
+            criteria:
+              - condition: $inputs.security-group == null && $inputs.anti-affinity-group == null && $inputs.private-network == null
+          - name: skip-to-private-network
+            type: goto
+            stepId: private-network
+            criteria:
+              - condition: $inputs.security-group == null && $inputs.anti-affinity-group == null
+          - name: skip-to-anti-affinity-group
+            type: goto
+            stepId: anti-affinity-group
+            criteria:
+              - condition: $inputs.security-group == null
+      - stepId: security-group
+        workflowId: $sourceDescriptions.common.security-group-id
+        parameters:
+          - name: security-group
+            value: $inputs.security-group
+        onSuccess:
+          - name: skip-to-create
+            type: goto
+            stepId: create
+            criteria:
+              - condition: $inputs.anti-affinity-group == null && $inputs.private-network == null
+          - name: skip-to-private-network
+            type: goto
+            stepId: private-network
+            criteria:
+              - condition: $inputs.anti-affinity-group == null
+      - stepId: anti-affinity-group
+        workflowId: $sourceDescriptions.common.anti-affinity-group-id
+        parameters:
+          - name: anti-affinity-group
+            value: $inputs.anti-affinity-group
+        onSuccess:
+          - name: skip-to-create
+            type: goto
+            stepId: create
+            criteria:
+              - condition: $inputs.private-network == null
+      - stepId: private-network
+        workflowId: $sourceDescriptions.common.private-network-id
+        parameters:
+          - name: private-network
+            value: $inputs.private-network
+      - stepId: create
+        operationId: create-instance-pool
+        requestBody:
+          contentType: application/json
+          payload:
+            name: $inputs.name
+            size: 0
+            description: $inputs.description
+            template:
+              id: $steps.template.outputs.id
+            instance-type:
+              id: $steps.instance-type.outputs.id
+            disk-size: $inputs.disk-size
+            ssh-key:
+              name: $inputs.ssh-key
+            instance-prefix: $inputs.instance-prefix
+            public-ip-assignment: $inputs.public-ip
+            ipv6-enabled: $inputs.ipv6
+            deploy-target:
+              id: $steps.deploy-target.outputs.id
+            labels: $inputs.labels
+            user-data: $inputs.user-data
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: created
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.create.outputs.job
+        onSuccess:
+          - name: skip-to-scale
+            type: goto
+            stepId: scale
+            criteria:
+              - condition: $inputs.security-group == null && $inputs.anti-affinity-group == null && $inputs.private-network == null
+          - name: skip-to-set-private-network
+            type: goto
+            stepId: set-private-network
+            criteria:
+              - condition: $inputs.security-group == null && $inputs.anti-affinity-group == null
+          - name: skip-to-set-anti-affinity-group
+            type: goto
+            stepId: set-anti-affinity-group
+            criteria:
+              - condition: $inputs.security-group == null
+      - stepId: set-security-group
+        operationId: update-instance-pool
+        parameters:
+          - name: id
+            in: path
+            value: $steps.created.outputs.reference
+        requestBody:
+          contentType: application/json
+          payload:
+            security-groups:
+              - id: $steps.security-group.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: security-group-set
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.set-security-group.outputs.job
+        onSuccess:
+          - name: skip-to-scale
+            type: goto
+            stepId: scale
+            criteria:
+              - condition: $inputs.anti-affinity-group == null && $inputs.private-network == null
+          - name: skip-to-set-private-network
+            type: goto
+            stepId: set-private-network
+            criteria:
+              - condition: $inputs.anti-affinity-group == null
+      - stepId: set-anti-affinity-group
+        operationId: update-instance-pool
+        parameters:
+          - name: id
+            in: path
+            value: $steps.created.outputs.reference
+        requestBody:
+          contentType: application/json
+          payload:
+            anti-affinity-groups:
+              - id: $steps.anti-affinity-group.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: anti-affinity-group-set
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.set-anti-affinity-group.outputs.job
+        onSuccess:
+          - name: skip-to-scale
+            type: goto
+            stepId: scale
+            criteria:
+              - condition: $inputs.private-network == null
+      - stepId: set-private-network
+        operationId: update-instance-pool
+        parameters:
+          - name: id
+            in: path
+            value: $steps.created.outputs.reference
+        requestBody:
+          contentType: application/json
+          payload:
+            private-networks:
+              - id: $steps.private-network.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: private-network-set
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.set-private-network.outputs.job
+      - stepId: scale
+        operationId: scale-instance-pool
+        parameters:
+          - name: id
+            in: path
+            value: $steps.created.outputs.reference
+        requestBody:
+          contentType: application/json
+          payload:
+            size: $inputs.size
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: scaled
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.scale.outputs.job
+        onSuccess:
+          - name: skip-to-show
+            type: goto
+            stepId: show
+            criteria:
+              - condition: $inputs.min-available == null
+      - stepId: set-min-available
+        operationId: update-instance-pool
+        parameters:
+          - name: id
+            in: path
+            value: $steps.created.outputs.reference
+        requestBody:
+          contentType: application/json
+          payload:
+            min-available: $inputs.min-available
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: min-available-set
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.set-min-available.outputs.job
+      - stepId: show
+        workflowId: instance-pool-show
+        parameters:
+          - name: instance-pool
+            value: $steps.created.outputs.reference
+    outputs:
+      instance-pool: $steps.show.outputs.instance-pool
+
+  - workflowId: instance-pool-update
+    x-ezu-command: instance-pool update
+    summary: Change an instance pool's settings; its instances keep theirs until they are replaced.
+    x-ezu-args: [instance-pool]
+    inputs:
+      type: object
+      required: [instance-pool]
+      properties:
+        instance-pool:
+          type: string
+          description: Instance pool name or id
+        name:
+          type: string
+          description: New name
+        description:
+          type: string
+          description: Description
+        template:
+          type: string
+          description: Template name or id
+        template-visibility:
+          type: string
+          enum: [public, private]
+          description: Where to look for the template
+          default: public
+        family:
+          type: string
+          description: Instance type family (standard, cpu, memory…), with instance-size
+          default: standard
+        instance-size:
+          type: string
+          description: Instance type size (micro, small, medium, large…)
+        disk-size:
+          type: integer
+          description: Disk size in GiB
+        ssh-key:
+          type: string
+          description: Name of an SSH key to deploy on the instances
+        instance-prefix:
+          type: string
+          description: Prefix of the instances' names
+        public-ip:
+          type: string
+          enum: [inet4, dual]
+          description: Public IP addresses to assign
+        ipv6:
+          type: boolean
+          description: Give the instances IPv6 addresses
+        min-available:
+          type: integer
+          description: Minimum number of running instances
+        security-group:
+          type: string
+          description: Name or id of the security group for the instances; it replaces the current ones
+        anti-affinity-group:
+          type: string
+          description: Name or id of the anti-affinity group for the instances; it replaces the current ones
+        private-network:
+          type: string
+          description: Name or id of the private network for the instances; it replaces the current ones
+        deploy-target:
+          type: string
+          description: Name or id of a deploy target for the instances
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+          description: Labels, as labels.KEY=VALUE; they replace the current ones
+        user-data:
+          type: string
+          description: Cloud-init user data, base64-encoded
+    steps:
+      - stepId: find
+        workflowId: instance-pool-id
+        parameters:
+          - name: instance-pool
+            value: $inputs.instance-pool
+        onSuccess:
+          - name: skip-to-update
+            type: goto
+            stepId: update
+            criteria:
+              - condition: $inputs.template == null && $inputs.instance-size == null && $inputs.deploy-target == null && $inputs.security-group == null && $inputs.anti-affinity-group == null && $inputs.private-network == null
+          - name: skip-to-private-network
+            type: goto
+            stepId: private-network
+            criteria:
+              - condition: $inputs.template == null && $inputs.instance-size == null && $inputs.deploy-target == null && $inputs.security-group == null && $inputs.anti-affinity-group == null
+          - name: skip-to-anti-affinity-group
+            type: goto
+            stepId: anti-affinity-group
+            criteria:
+              - condition: $inputs.template == null && $inputs.instance-size == null && $inputs.deploy-target == null && $inputs.security-group == null
+          - name: skip-to-security-group
+            type: goto
+            stepId: security-group
+            criteria:
+              - condition: $inputs.template == null && $inputs.instance-size == null && $inputs.deploy-target == null
+          - name: skip-to-deploy-target
+            type: goto
+            stepId: deploy-target
+            criteria:
+              - condition: $inputs.template == null && $inputs.instance-size == null
+          - name: skip-to-instance-type
+            type: goto
+            stepId: instance-type
+            criteria:
+              - condition: $inputs.template == null
+      - stepId: template
+        operationId: list-templates
+        parameters:
+          - name: visibility
+            in: query
+            value: $inputs.template-visibility
+        successCriteria:
+          - condition: $statusCode == 200
+          - context: $response.body
+            type: jsonpath
+            condition: "$.templates[?@.name == '{$inputs.template}' || @.id == '{$inputs.template}']"
+        outputs:
+          id:
+            context: $response.body
+            type: jsonpath
+            selector: "$.templates[?@.name == '{$inputs.template}' || @.id == '{$inputs.template}'].id"
+        onSuccess:
+          - name: skip-to-update
+            type: goto
+            stepId: update
+            criteria:
+              - condition: $inputs.instance-size == null && $inputs.deploy-target == null && $inputs.security-group == null && $inputs.anti-affinity-group == null && $inputs.private-network == null
+          - name: skip-to-private-network
+            type: goto
+            stepId: private-network
+            criteria:
+              - condition: $inputs.instance-size == null && $inputs.deploy-target == null && $inputs.security-group == null && $inputs.anti-affinity-group == null
+          - name: skip-to-anti-affinity-group
+            type: goto
+            stepId: anti-affinity-group
+            criteria:
+              - condition: $inputs.instance-size == null && $inputs.deploy-target == null && $inputs.security-group == null
+          - name: skip-to-security-group
+            type: goto
+            stepId: security-group
+            criteria:
+              - condition: $inputs.instance-size == null && $inputs.deploy-target == null
+          - name: skip-to-deploy-target
+            type: goto
+            stepId: deploy-target
+            criteria:
+              - condition: $inputs.instance-size == null
+      - stepId: instance-type
+        operationId: list-instance-types
+        successCriteria:
+          - condition: $statusCode == 200
+          - context: $response.body
+            type: jsonpath
+            condition: "$['instance-types'][?@.family == '{$inputs.family}' && @.size == '{$inputs.instance-size}']"
+        outputs:
+          id:
+            context: $response.body
+            type: jsonpath
+            selector: "$['instance-types'][?@.family == '{$inputs.family}' && @.size == '{$inputs.instance-size}'].id"
+        onSuccess:
+          - name: skip-to-update
+            type: goto
+            stepId: update
+            criteria:
+              - condition: $inputs.deploy-target == null && $inputs.security-group == null && $inputs.anti-affinity-group == null && $inputs.private-network == null
+          - name: skip-to-private-network
+            type: goto
+            stepId: private-network
+            criteria:
+              - condition: $inputs.deploy-target == null && $inputs.security-group == null && $inputs.anti-affinity-group == null
+          - name: skip-to-anti-affinity-group
+            type: goto
+            stepId: anti-affinity-group
+            criteria:
+              - condition: $inputs.deploy-target == null && $inputs.security-group == null
+          - name: skip-to-security-group
+            type: goto
+            stepId: security-group
+            criteria:
+              - condition: $inputs.deploy-target == null
+      - stepId: deploy-target
+        workflowId: deploy-target-id
+        parameters:
+          - name: deploy-target
+            value: $inputs.deploy-target
+        onSuccess:
+          - name: skip-to-update
+            type: goto
+            stepId: update
+            criteria:
+              - condition: $inputs.security-group == null && $inputs.anti-affinity-group == null && $inputs.private-network == null
+          - name: skip-to-private-network
+            type: goto
+            stepId: private-network
+            criteria:
+              - condition: $inputs.security-group == null && $inputs.anti-affinity-group == null
+          - name: skip-to-anti-affinity-group
+            type: goto
+            stepId: anti-affinity-group
+            criteria:
+              - condition: $inputs.security-group == null
+      - stepId: security-group
+        workflowId: $sourceDescriptions.common.security-group-id
+        parameters:
+          - name: security-group
+            value: $inputs.security-group
+        onSuccess:
+          - name: skip-to-update
+            type: goto
+            stepId: update
+            criteria:
+              - condition: $inputs.anti-affinity-group == null && $inputs.private-network == null
+          - name: skip-to-private-network
+            type: goto
+            stepId: private-network
+            criteria:
+              - condition: $inputs.anti-affinity-group == null
+      - stepId: anti-affinity-group
+        workflowId: $sourceDescriptions.common.anti-affinity-group-id
+        parameters:
+          - name: anti-affinity-group
+            value: $inputs.anti-affinity-group
+        onSuccess:
+          - name: skip-to-update
+            type: goto
+            stepId: update
+            criteria:
+              - condition: $inputs.private-network == null
+      - stepId: private-network
+        workflowId: $sourceDescriptions.common.private-network-id
+        parameters:
+          - name: private-network
+            value: $inputs.private-network
+      - stepId: update
+        operationId: update-instance-pool
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            name: $inputs.name
+            description: $inputs.description
+            template:
+              id: $steps.template.outputs.id
+            instance-type:
+              id: $steps.instance-type.outputs.id
+            disk-size: $inputs.disk-size
+            ssh-key:
+              name: $inputs.ssh-key
+            instance-prefix: $inputs.instance-prefix
+            public-ip-assignment: $inputs.public-ip
+            ipv6-enabled: $inputs.ipv6
+            min-available: $inputs.min-available
+            deploy-target:
+              id: $steps.deploy-target.outputs.id
+            labels: $inputs.labels
+            user-data: $inputs.user-data
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: updated
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.update.outputs.job
+        onSuccess:
+          - name: skip-to-show
+            type: goto
+            stepId: show
+            criteria:
+              - condition: $inputs.security-group == null && $inputs.anti-affinity-group == null && $inputs.private-network == null
+          - name: skip-to-set-private-network
+            type: goto
+            stepId: set-private-network
+            criteria:
+              - condition: $inputs.security-group == null && $inputs.anti-affinity-group == null
+          - name: skip-to-set-anti-affinity-group
+            type: goto
+            stepId: set-anti-affinity-group
+            criteria:
+              - condition: $inputs.security-group == null
+      - stepId: set-security-group
+        operationId: update-instance-pool
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            security-groups:
+              - id: $steps.security-group.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: security-group-set
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.set-security-group.outputs.job
+        onSuccess:
+          - name: skip-to-show
+            type: goto
+            stepId: show
+            criteria:
+              - condition: $inputs.anti-affinity-group == null && $inputs.private-network == null
+          - name: skip-to-set-private-network
+            type: goto
+            stepId: set-private-network
+            criteria:
+              - condition: $inputs.anti-affinity-group == null
+      - stepId: set-anti-affinity-group
+        operationId: update-instance-pool
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            anti-affinity-groups:
+              - id: $steps.anti-affinity-group.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: anti-affinity-group-set
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.set-anti-affinity-group.outputs.job
+        onSuccess:
+          - name: skip-to-show
+            type: goto
+            stepId: show
+            criteria:
+              - condition: $inputs.private-network == null
+      - stepId: set-private-network
+        operationId: update-instance-pool
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            private-networks:
+              - id: $steps.private-network.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: private-network-set
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.set-private-network.outputs.job
+      - stepId: show
+        workflowId: instance-pool-show
+        parameters:
+          - name: instance-pool
+            value: $steps.find.outputs.id
+    outputs:
+      instance-pool: $steps.show.outputs.instance-pool
+
+  - workflowId: instance-pool-scale
+    x-ezu-command: instance-pool scale
+    summary: Change the number of instances of an instance pool.
+    x-ezu-args: [instance-pool, size]
+    inputs:
+      type: object
+      required: [instance-pool, size]
+      properties:
+        instance-pool:
+          type: string
+          description: Instance pool name or id
+        size:
+          type: integer
+          description: Number of instances
+    steps:
+      - stepId: find
+        workflowId: instance-pool-id
+        parameters:
+          - name: instance-pool
+            value: $inputs.instance-pool
+      - stepId: scale
+        operationId: scale-instance-pool
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            size: $inputs.size
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.scale.outputs.job
+      - stepId: show
+        workflowId: instance-pool-show
+        parameters:
+          - name: instance-pool
+            value: $steps.find.outputs.id
+    outputs:
+      instance-pool: $steps.show.outputs.instance-pool
+
+  - workflowId: instance-pool-evict
+    x-ezu-command: instance-pool evict
+    summary: Remove an instance from an instance pool, deleting it and shrinking the pool.
+    x-ezu-args: [instance-pool, instance]
+    inputs:
+      type: object
+      required: [instance-pool, instance]
+      properties:
+        instance-pool:
+          type: string
+          description: Instance pool name or id
+        instance:
+          type: string
+          description: Name or id of the instance to evict
+    steps:
+      - stepId: find
+        workflowId: instance-pool-id
+        parameters:
+          - name: instance-pool
+            value: $inputs.instance-pool
+      - stepId: instance
+        workflowId: $sourceDescriptions.common.instance-id
+        parameters:
+          - name: instance
+            value: $inputs.instance
+      - stepId: evict
+        operationId: evict-instance-pool-members
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            instances:
+              - $steps.instance.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.evict.outputs.job
+      - stepId: show
+        workflowId: instance-pool-show
+        parameters:
+          - name: instance-pool
+            value: $steps.find.outputs.id
+    outputs:
+      instance-pool: $steps.show.outputs.instance-pool
+
+  - workflowId: instance-pool-delete
+    x-ezu-command: instance-pool delete
+    summary: Delete an instance pool and its instances.
+    x-ezu-args: [instance-pool]
+    inputs:
+      type: object
+      required: [instance-pool]
+      properties:
+        instance-pool:
+          type: string
+          description: Instance pool name or id
+    steps:
+      - stepId: find
+        workflowId: instance-pool-id
+        parameters:
+          - name: instance-pool
+            value: $inputs.instance-pool
+      - stepId: delete
+        operationId: delete-instance-pool
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.delete.outputs.job
+    outputs:
+      deleted: $steps.find.outputs.id
+
+  - workflowId: instance-pool-id
+    summary: The id of an instance pool, given its name or id.
+    x-ezu-args: [instance-pool]
+    inputs:
+      type: object
+      required: [instance-pool]
+      properties:
+        instance-pool:
+          type: string
+          description: Instance pool name or id
+    steps:
+      - stepId: find
+        operationId: list-instance-pools
+        successCriteria:
+          - condition: $statusCode == 200
+          - context: $response.body
+            type: jsonpath
+            condition: "$['instance-pools'][?@.name == '{$inputs.instance-pool}' || @.id == '{$inputs.instance-pool}']"
+        outputs:
+          id:
+            context: $response.body
+            type: jsonpath
+            selector: "$['instance-pools'][?@.name == '{$inputs.instance-pool}' || @.id == '{$inputs.instance-pool}'].id"
+    outputs:
+      id: $steps.find.outputs.id
+
+  # ---- network load balancers ----
+
+  - workflowId: load-balancer-list
+    x-ezu-command: load-balancer list
+    summary: List network load balancers.
+    steps:
+      - stepId: list
+        operationId: list-load-balancers
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          load-balancers: $response.body#/load-balancers
+    outputs:
+      load-balancers: $steps.list.outputs.load-balancers
+
+  - workflowId: load-balancer-show
+    x-ezu-command: load-balancer show
+    summary: Show a network load balancer and its services.
+    x-ezu-args: [load-balancer]
+    inputs:
+      type: object
+      required: [load-balancer]
+      properties:
+        load-balancer:
+          type: string
+          description: Load balancer name or id
+    steps:
+      - stepId: find
+        workflowId: load-balancer-id
+        parameters:
+          - name: load-balancer
+            value: $inputs.load-balancer
+      - stepId: show
+        operationId: get-load-balancer
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          load-balancer: $response.body
+    outputs:
+      load-balancer: $steps.show.outputs.load-balancer
+
+  - workflowId: load-balancer-create
+    x-ezu-command: load-balancer create
+    summary: Create a network load balancer.
+    x-ezu-args: [name]
+    inputs:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          description: Load balancer name
+        description:
+          type: string
+          description: Description
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+          description: Labels, as labels.KEY=VALUE
+    steps:
+      - stepId: create
+        operationId: create-load-balancer
+        requestBody:
+          contentType: application/json
+          payload:
+            name: $inputs.name
+            description: $inputs.description
+            labels: $inputs.labels
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.create.outputs.job
+      - stepId: show
+        workflowId: load-balancer-show
+        parameters:
+          - name: load-balancer
+            value: $steps.done.outputs.reference
+    outputs:
+      load-balancer: $steps.show.outputs.load-balancer
+
+  - workflowId: load-balancer-update
+    x-ezu-command: load-balancer update
+    summary: Rename a network load balancer or change its description or labels.
+    x-ezu-args: [load-balancer]
+    inputs:
+      type: object
+      required: [load-balancer]
+      properties:
+        load-balancer:
+          type: string
+          description: Load balancer name or id
+        name:
+          type: string
+          description: New name
+        description:
+          type: string
+          description: Description
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+          description: Labels, as labels.KEY=VALUE; they replace the current ones
+    steps:
+      - stepId: find
+        workflowId: load-balancer-id
+        parameters:
+          - name: load-balancer
+            value: $inputs.load-balancer
+      - stepId: update
+        operationId: update-load-balancer
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            name: $inputs.name
+            description: $inputs.description
+            labels: $inputs.labels
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.update.outputs.job
+      - stepId: show
+        workflowId: load-balancer-show
+        parameters:
+          - name: load-balancer
+            value: $steps.find.outputs.id
+    outputs:
+      load-balancer: $steps.show.outputs.load-balancer
+
+  - workflowId: load-balancer-delete
+    x-ezu-command: load-balancer delete
+    summary: Delete a network load balancer.
+    x-ezu-args: [load-balancer]
+    inputs:
+      type: object
+      required: [load-balancer]
+      properties:
+        load-balancer:
+          type: string
+          description: Load balancer name or id
+    steps:
+      - stepId: find
+        workflowId: load-balancer-id
+        parameters:
+          - name: load-balancer
+            value: $inputs.load-balancer
+      - stepId: delete
+        operationId: delete-load-balancer
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.delete.outputs.job
+    outputs:
+      deleted: $steps.find.outputs.id
+
+  - workflowId: load-balancer-service-show
+    x-ezu-command: load-balancer service show
+    summary: Show a service of a network load balancer, with its health check status.
+    x-ezu-args: [load-balancer, service]
+    inputs:
+      type: object
+      required: [load-balancer, service]
+      properties:
+        load-balancer:
+          type: string
+          description: Load balancer name or id
+        service:
+          type: string
+          description: Service name or id
+    steps:
+      - stepId: find
+        workflowId: load-balancer-id
+        parameters:
+          - name: load-balancer
+            value: $inputs.load-balancer
+      - stepId: service
+        workflowId: load-balancer-service-id
+        parameters:
+          - name: load-balancer
+            value: $steps.find.outputs.id
+          - name: service
+            value: $inputs.service
+      - stepId: show
+        operationId: get-load-balancer-service
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+          - name: service-id
+            in: path
+            value: $steps.service.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          service: $response.body
+    outputs:
+      service: $steps.show.outputs.service
+
+  # Exoscale's defaults: the target port is the service's port, and the
+  # health check's port the target port; each combination of given ports
+  # is its own step.
+  - workflowId: load-balancer-service-add
+    x-ezu-command: load-balancer service add
+    summary: Add a service to a network load balancer, forwarding to an instance pool.
+    x-ezu-args: [load-balancer, name]
+    inputs:
+      type: object
+      required: [load-balancer, name, instance-pool, port]
+      properties:
+        load-balancer:
+          type: string
+          description: Load balancer name or id
+        name:
+          type: string
+          description: Service name
+        description:
+          type: string
+          description: Description
+        instance-pool:
+          type: string
+          description: Name or id of the instance pool to forward traffic to
+        port:
+          type: integer
+          description: Port the load balancer listens on
+        target-port:
+          type: integer
+          description: Port to forward traffic to on the instances; port by default
+        protocol:
+          type: string
+          enum: [tcp, udp]
+          description: Network protocol
+          default: tcp
+        strategy:
+          type: string
+          enum: [round-robin, maglev-hash, source-hash]
+          description: Load balancing strategy
+          default: round-robin
+        healthcheck-mode:
+          type: string
+          enum: [tcp, http, https]
+          description: Health check mode
+          default: tcp
+        healthcheck-port:
+          type: integer
+          description: Health check port; the target port by default
+        healthcheck-uri:
+          type: string
+          description: Health check URI, required in http(s) mode
+        healthcheck-interval:
+          type: integer
+          description: Seconds between checks
+          default: 10
+        healthcheck-timeout:
+          type: integer
+          description: Health check timeout, in seconds
+          default: 5
+        healthcheck-retries:
+          type: integer
+          description: Failed checks before an instance is taken out
+          default: 1
+        healthcheck-tls-sni:
+          type: string
+          description: Server name to present with SNI, in https mode
+    steps:
+      - stepId: find
+        workflowId: load-balancer-id
+        parameters:
+          - name: load-balancer
+            value: $inputs.load-balancer
+      - stepId: instance-pool
+        workflowId: instance-pool-id
+        parameters:
+          - name: instance-pool
+            value: $inputs.instance-pool
+        onSuccess:
+          - name: both-ports
+            type: goto
+            stepId: add-both
+            criteria:
+              - condition: $inputs.target-port != null && $inputs.healthcheck-port != null
+          - name: target-port
+            type: goto
+            stepId: add-target
+            criteria:
+              - condition: $inputs.target-port != null
+          - name: healthcheck-port
+            type: goto
+            stepId: add-healthcheck
+            criteria:
+              - condition: $inputs.healthcheck-port != null
+      - stepId: add
+        operationId: add-service-to-load-balancer
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            name: $inputs.name
+            description: $inputs.description
+            instance-pool:
+              id: $steps.instance-pool.outputs.id
+            protocol: $inputs.protocol
+            strategy: $inputs.strategy
+            port: $inputs.port
+            target-port: $inputs.port
+            healthcheck:
+              mode: $inputs.healthcheck-mode
+              port: $inputs.port
+              uri: $inputs.healthcheck-uri
+              interval: $inputs.healthcheck-interval
+              timeout: $inputs.healthcheck-timeout
+              retries: $inputs.healthcheck-retries
+              tls-sni: $inputs.healthcheck-tls-sni
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: added
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.add.outputs.job
+        onSuccess:
+          - name: added
+            type: goto
+            stepId: show
+      - stepId: add-target
+        operationId: add-service-to-load-balancer
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            name: $inputs.name
+            description: $inputs.description
+            instance-pool:
+              id: $steps.instance-pool.outputs.id
+            protocol: $inputs.protocol
+            strategy: $inputs.strategy
+            port: $inputs.port
+            target-port: $inputs.target-port
+            healthcheck:
+              mode: $inputs.healthcheck-mode
+              port: $inputs.target-port
+              uri: $inputs.healthcheck-uri
+              interval: $inputs.healthcheck-interval
+              timeout: $inputs.healthcheck-timeout
+              retries: $inputs.healthcheck-retries
+              tls-sni: $inputs.healthcheck-tls-sni
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: added-target
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.add-target.outputs.job
+        onSuccess:
+          - name: added
+            type: goto
+            stepId: show
+      - stepId: add-healthcheck
+        operationId: add-service-to-load-balancer
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            name: $inputs.name
+            description: $inputs.description
+            instance-pool:
+              id: $steps.instance-pool.outputs.id
+            protocol: $inputs.protocol
+            strategy: $inputs.strategy
+            port: $inputs.port
+            target-port: $inputs.port
+            healthcheck:
+              mode: $inputs.healthcheck-mode
+              port: $inputs.healthcheck-port
+              uri: $inputs.healthcheck-uri
+              interval: $inputs.healthcheck-interval
+              timeout: $inputs.healthcheck-timeout
+              retries: $inputs.healthcheck-retries
+              tls-sni: $inputs.healthcheck-tls-sni
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: added-healthcheck
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.add-healthcheck.outputs.job
+        onSuccess:
+          - name: added
+            type: goto
+            stepId: show
+      - stepId: add-both
+        operationId: add-service-to-load-balancer
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            name: $inputs.name
+            description: $inputs.description
+            instance-pool:
+              id: $steps.instance-pool.outputs.id
+            protocol: $inputs.protocol
+            strategy: $inputs.strategy
+            port: $inputs.port
+            target-port: $inputs.target-port
+            healthcheck:
+              mode: $inputs.healthcheck-mode
+              port: $inputs.healthcheck-port
+              uri: $inputs.healthcheck-uri
+              interval: $inputs.healthcheck-interval
+              timeout: $inputs.healthcheck-timeout
+              retries: $inputs.healthcheck-retries
+              tls-sni: $inputs.healthcheck-tls-sni
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: added-both
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.add-both.outputs.job
+      - stepId: show
+        workflowId: load-balancer-service-show
+        parameters:
+          - name: load-balancer
+            value: $steps.find.outputs.id
+          - name: service
+            value: $inputs.name
+    outputs:
+      service: $steps.show.outputs.service
+
+  - workflowId: load-balancer-service-update
+    x-ezu-command: load-balancer service update
+    summary: Change a service of a network load balancer.
+    x-ezu-args: [load-balancer, service]
+    inputs:
+      type: object
+      required: [load-balancer, service]
+      properties:
+        load-balancer:
+          type: string
+          description: Load balancer name or id
+        service:
+          type: string
+          description: Service name or id
+        name:
+          type: string
+          description: New name
+        description:
+          type: string
+          description: Description
+        port:
+          type: integer
+          description: Port the load balancer listens on
+        target-port:
+          type: integer
+          description: Port to forward traffic to on the instances
+        protocol:
+          type: string
+          enum: [tcp, udp]
+          description: Network protocol
+        strategy:
+          type: string
+          enum: [round-robin, maglev-hash, source-hash]
+          description: Load balancing strategy
+        healthcheck-mode:
+          type: string
+          enum: [tcp, http, https]
+          description: Health check mode
+        healthcheck-port:
+          type: integer
+          description: Health check port
+        healthcheck-uri:
+          type: string
+          description: Health check URI, required in http(s) mode
+        healthcheck-interval:
+          type: integer
+          description: Seconds between checks
+        healthcheck-timeout:
+          type: integer
+          description: Health check timeout, in seconds
+        healthcheck-retries:
+          type: integer
+          description: Failed checks before an instance is taken out
+        healthcheck-tls-sni:
+          type: string
+          description: Server name to present with SNI, in https mode
+    steps:
+      - stepId: find
+        workflowId: load-balancer-id
+        parameters:
+          - name: load-balancer
+            value: $inputs.load-balancer
+      - stepId: service
+        workflowId: load-balancer-service-id
+        parameters:
+          - name: load-balancer
+            value: $steps.find.outputs.id
+          - name: service
+            value: $inputs.service
+      - stepId: update
+        operationId: update-load-balancer-service
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+          - name: service-id
+            in: path
+            value: $steps.service.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            name: $inputs.name
+            description: $inputs.description
+            protocol: $inputs.protocol
+            strategy: $inputs.strategy
+            port: $inputs.port
+            target-port: $inputs.target-port
+            healthcheck:
+              mode: $inputs.healthcheck-mode
+              port: $inputs.healthcheck-port
+              uri: $inputs.healthcheck-uri
+              interval: $inputs.healthcheck-interval
+              timeout: $inputs.healthcheck-timeout
+              retries: $inputs.healthcheck-retries
+              tls-sni: $inputs.healthcheck-tls-sni
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.update.outputs.job
+      - stepId: show
+        workflowId: load-balancer-service-show
+        parameters:
+          - name: load-balancer
+            value: $steps.find.outputs.id
+          - name: service
+            value: $steps.service.outputs.id
+    outputs:
+      service: $steps.show.outputs.service
+
+  - workflowId: load-balancer-service-delete
+    x-ezu-command: load-balancer service delete
+    summary: Delete a service of a network load balancer.
+    x-ezu-args: [load-balancer, service]
+    inputs:
+      type: object
+      required: [load-balancer, service]
+      properties:
+        load-balancer:
+          type: string
+          description: Load balancer name or id
+        service:
+          type: string
+          description: Service name or id
+    steps:
+      - stepId: find
+        workflowId: load-balancer-id
+        parameters:
+          - name: load-balancer
+            value: $inputs.load-balancer
+      - stepId: service
+        workflowId: load-balancer-service-id
+        parameters:
+          - name: load-balancer
+            value: $steps.find.outputs.id
+          - name: service
+            value: $inputs.service
+      - stepId: delete
+        operationId: delete-load-balancer-service
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+          - name: service-id
+            in: path
+            value: $steps.service.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.delete.outputs.job
+    outputs:
+      deleted: $steps.service.outputs.id
+
+  - workflowId: load-balancer-id
+    summary: The id of a network load balancer, given its name or id.
+    x-ezu-args: [load-balancer]
+    inputs:
+      type: object
+      required: [load-balancer]
+      properties:
+        load-balancer:
+          type: string
+          description: Load balancer name or id
+    steps:
+      - stepId: find
+        operationId: list-load-balancers
+        successCriteria:
+          - condition: $statusCode == 200
+          - context: $response.body
+            type: jsonpath
+            condition: "$['load-balancers'][?@.name == '{$inputs.load-balancer}' || @.id == '{$inputs.load-balancer}']"
+        outputs:
+          id:
+            context: $response.body
+            type: jsonpath
+            selector: "$['load-balancers'][?@.name == '{$inputs.load-balancer}' || @.id == '{$inputs.load-balancer}'].id"
+    outputs:
+      id: $steps.find.outputs.id
+
+  - workflowId: load-balancer-service-id
+    summary: The id of a network load balancer's service, given its name or id.
+    x-ezu-args: [load-balancer, service]
+    inputs:
+      type: object
+      required: [load-balancer, service]
+      properties:
+        load-balancer:
+          type: string
+          description: Load balancer id
+        service:
+          type: string
+          description: Service name or id
+    steps:
+      - stepId: find
+        operationId: get-load-balancer
+        parameters:
+          - name: id
+            in: path
+            value: $inputs.load-balancer
+        successCriteria:
+          - condition: $statusCode == 200
+          - context: $response.body
+            type: jsonpath
+            condition: "$.services[?@.name == '{$inputs.service}' || @.id == '{$inputs.service}']"
+        outputs:
+          id:
+            context: $response.body
+            type: jsonpath
+            selector: "$.services[?@.name == '{$inputs.service}' || @.id == '{$inputs.service}'].id"
+    outputs:
+      id: $steps.find.outputs.id

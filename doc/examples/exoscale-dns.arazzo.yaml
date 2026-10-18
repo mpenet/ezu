@@ -1,0 +1,452 @@
+# Exoscale's `exo dns` commands as Arazzo workflows, mounted by
+# exoscale.arazzo.yaml as `exo dns`: domains, named by name or id, and their
+# records, named by name (and type) or id; changes wait for their job to finish.
+arazzo: 1.1.0
+info:
+  title: Exoscale DNS
+  summary: DNS domains and their records.
+  version: 1.0.0
+sourceDescriptions:
+  - name: exoscale
+    url: https://openapi-v2.exoscale.com/source.json
+    type: openapi
+  # waiting for jobs
+  - name: common
+    url: exoscale-common.arazzo.yaml
+    type: arazzo
+workflows:
+  # ---- finding ids ----
+
+  - workflowId: domain-id
+    summary: The id of a DNS domain, given its name or id.
+    x-ezu-args: [domain]
+    inputs:
+      type: object
+      required: [domain]
+      properties:
+        domain:
+          type: string
+          description: Domain name or id
+    steps:
+      - stepId: find
+        operationId: list-dns-domains
+        successCriteria:
+          - condition: $statusCode == 200
+          - context: $response.body
+            type: jsonpath
+            condition: "$['dns-domains'][?@['unicode-name'] == '{$inputs.domain}' || @.id == '{$inputs.domain}']"
+        outputs:
+          id:
+            context: $response.body
+            type: jsonpath
+            selector: "$['dns-domains'][?@['unicode-name'] == '{$inputs.domain}' || @.id == '{$inputs.domain}'].id"
+    outputs:
+      id: $steps.find.outputs.id
+
+  - workflowId: record-id
+    summary: The id of a record of a DNS domain, given its name (and type) or id.
+    x-ezu-args: [domain-id, record]
+    inputs:
+      type: object
+      required: [domain-id, record]
+      properties:
+        domain-id:
+          type: string
+          description: Domain id
+        record:
+          type: string
+          description: Record name or id
+        type:
+          type: string
+          description: Record type, to tell apart records of the same name
+    steps:
+      - stepId: find
+        operationId: list-dns-domain-records
+        parameters:
+          - name: domain-id
+            in: path
+            value: $inputs.domain-id
+        successCriteria:
+          - condition: $statusCode == 200
+          # a missing type is pasted as '', which matches any type
+          - context: $response.body
+            type: jsonpath
+            condition: "$['dns-domain-records'][?(@.name == '{$inputs.record}' && ('{$inputs.type}' == '' || @.type == '{$inputs.type}')) || @.id == '{$inputs.record}']"
+        outputs:
+          id:
+            context: $response.body
+            type: jsonpath
+            selector: "$['dns-domain-records'][?(@.name == '{$inputs.record}' && ('{$inputs.type}' == '' || @.type == '{$inputs.type}')) || @.id == '{$inputs.record}'].id"
+    outputs:
+      id: $steps.find.outputs.id
+
+  # ---- domains ----
+
+  - workflowId: list
+    x-ezu-command: list
+    summary: List the DNS domains.
+    steps:
+      - stepId: list
+        operationId: list-dns-domains
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          domains: $response.body#/dns-domains
+    outputs:
+      domains: $steps.list.outputs.domains
+
+  - workflowId: show
+    x-ezu-command: show
+    summary: Show a DNS domain and its records.
+    x-ezu-args: [domain]
+    inputs:
+      type: object
+      required: [domain]
+      properties:
+        domain:
+          type: string
+          description: Domain name or id
+    steps:
+      - stepId: find
+        workflowId: domain-id
+        parameters:
+          - name: domain
+            value: $inputs.domain
+      - stepId: show
+        operationId: get-dns-domain
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          domain: $response.body
+      - stepId: records
+        operationId: list-dns-domain-records
+        parameters:
+          - name: domain-id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          records: $response.body#/dns-domain-records
+    outputs:
+      domain: $steps.show.outputs.domain
+      records: $steps.records.outputs.records
+
+  - workflowId: zone-file
+    x-ezu-command: zone-file
+    summary: Show the zone file of a DNS domain.
+    x-ezu-args: [domain]
+    inputs:
+      type: object
+      required: [domain]
+      properties:
+        domain:
+          type: string
+          description: Domain name or id
+    steps:
+      - stepId: find
+        workflowId: domain-id
+        parameters:
+          - name: domain
+            value: $inputs.domain
+      - stepId: zone
+        operationId: get-dns-domain-zone-file
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          zone-file: $response.body#/zone-file
+    outputs:
+      zone-file: $steps.zone.outputs.zone-file
+
+  - workflowId: create
+    x-ezu-command: create
+    summary: Create a DNS domain, wait until it exists, and show it.
+    x-ezu-args: [name]
+    inputs:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          description: Domain name
+    steps:
+      - stepId: create
+        operationId: create-dns-domain
+        requestBody:
+          contentType: application/json
+          payload:
+            unicode-name: $inputs.name
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: created
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.create.outputs.job
+      - stepId: show
+        workflowId: show
+        parameters:
+          - name: domain
+            value: $steps.created.outputs.reference
+    outputs:
+      domain: $steps.show.outputs.domain
+      records: $steps.show.outputs.records
+
+  - workflowId: delete
+    x-ezu-command: delete
+    summary: Delete a DNS domain and its records, and wait until it is gone.
+    x-ezu-args: [domain]
+    inputs:
+      type: object
+      required: [domain]
+      properties:
+        domain:
+          type: string
+          description: Domain name or id
+    steps:
+      - stepId: find
+        workflowId: domain-id
+        parameters:
+          - name: domain
+            value: $inputs.domain
+      - stepId: delete
+        operationId: delete-dns-domain
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.delete.outputs.job
+    outputs:
+      deleted: $steps.find.outputs.id
+
+  # ---- records ----
+
+  - workflowId: add
+    x-ezu-command: add
+    summary: Add a record to a DNS domain, wait until it exists, and show it.
+    x-ezu-args: [domain, type]
+    inputs:
+      type: object
+      required: [domain, type, content]
+      properties:
+        domain:
+          type: string
+          description: Domain name or id
+        type:
+          type: string
+          enum: [A, AAAA, ALIAS, CAA, CNAME, HINFO, MX, NAPTR, NS, POOL, SRV, SSHFP, TXT, URL]
+          description: Record type
+        name:
+          type: string
+          description: Record name, empty for the domain itself; * is a wildcard
+          default: ""
+        content:
+          type: string
+          description: Record content (an address, a host name, text…)
+        ttl:
+          type: integer
+          description: Time to live, in seconds
+          default: 3600
+        priority:
+          type: integer
+          description: Priority, for MX and SRV records
+    steps:
+      - stepId: find
+        workflowId: domain-id
+        parameters:
+          - name: domain
+            value: $inputs.domain
+      - stepId: add
+        operationId: create-dns-domain-record
+        parameters:
+          - name: domain-id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            name: $inputs.name
+            type: $inputs.type
+            content: $inputs.content
+            ttl: $inputs.ttl
+            priority: $inputs.priority
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: added
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.add.outputs.job
+      - stepId: show
+        operationId: get-dns-domain-record
+        parameters:
+          - name: domain-id
+            in: path
+            value: $steps.find.outputs.id
+          - name: record-id
+            in: path
+            value: $steps.added.outputs.reference
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          record: $response.body
+    outputs:
+      record: $steps.show.outputs.record
+
+  - workflowId: update
+    x-ezu-command: update
+    summary: Change a record of a DNS domain, wait until it is changed, and show it.
+    x-ezu-args: [domain, record]
+    inputs:
+      type: object
+      required: [domain, record]
+      properties:
+        domain:
+          type: string
+          description: Domain name or id
+        record:
+          type: string
+          description: Record name or id
+        type:
+          type: string
+          description: Record type, to tell apart records of the same name
+        name:
+          type: string
+          description: New name
+        content:
+          type: string
+          description: New content
+        ttl:
+          type: integer
+          description: New time to live, in seconds
+        priority:
+          type: integer
+          description: New priority
+    steps:
+      - stepId: find
+        workflowId: domain-id
+        parameters:
+          - name: domain
+            value: $inputs.domain
+      - stepId: find-record
+        workflowId: record-id
+        parameters:
+          - name: domain-id
+            value: $steps.find.outputs.id
+          - name: record
+            value: $inputs.record
+          - name: type
+            value: $inputs.type
+      - stepId: update
+        operationId: update-dns-domain-record
+        parameters:
+          - name: domain-id
+            in: path
+            value: $steps.find.outputs.id
+          - name: record-id
+            in: path
+            value: $steps.find-record.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            name: $inputs.name
+            content: $inputs.content
+            ttl: $inputs.ttl
+            priority: $inputs.priority
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.update.outputs.job
+      - stepId: show
+        operationId: get-dns-domain-record
+        parameters:
+          - name: domain-id
+            in: path
+            value: $steps.find.outputs.id
+          - name: record-id
+            in: path
+            value: $steps.find-record.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          record: $response.body
+    outputs:
+      record: $steps.show.outputs.record
+
+  - workflowId: remove
+    x-ezu-command: remove
+    summary: Remove a record from a DNS domain and wait until it is gone.
+    x-ezu-args: [domain, record]
+    inputs:
+      type: object
+      required: [domain, record]
+      properties:
+        domain:
+          type: string
+          description: Domain name or id
+        record:
+          type: string
+          description: Record name or id
+        type:
+          type: string
+          description: Record type, to tell apart records of the same name
+    steps:
+      - stepId: find
+        workflowId: domain-id
+        parameters:
+          - name: domain
+            value: $inputs.domain
+      - stepId: find-record
+        workflowId: record-id
+        parameters:
+          - name: domain-id
+            value: $steps.find.outputs.id
+          - name: record
+            value: $inputs.record
+          - name: type
+            value: $inputs.type
+      - stepId: remove
+        operationId: delete-dns-domain-record
+        parameters:
+          - name: domain-id
+            in: path
+            value: $steps.find.outputs.id
+          - name: record-id
+            in: path
+            value: $steps.find-record.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.remove.outputs.job
+    outputs:
+      deleted: $steps.find-record.outputs.id

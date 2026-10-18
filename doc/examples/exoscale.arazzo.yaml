@@ -13,6 +13,10 @@
 #   exo compute instance stop web1
 #   exo compute security-group rule add web port=443
 #   exo compute instance list --server.zone=de-fra-1
+#   exo compute sks nodepool add k8s workers size=3
+#   exo dbaas create pg db1 hobbyist-2
+#   exo dns add example.com A name=www content=192.0.2.1
+#   exo iam role list
 #   exo zone list
 #
 # Where exo takes a resource as NAME|ID, so do these workflows; the zone is
@@ -30,6 +34,30 @@ sourceDescriptions:
     url: exoscale-compute.arazzo.yaml
     type: arazzo
     x-ezu-command: compute
+  - name: dbaas
+    url: exoscale-dbaas.arazzo.yaml
+    type: arazzo
+    x-ezu-command: dbaas
+  - name: dns
+    url: exoscale-dns.arazzo.yaml
+    type: arazzo
+    x-ezu-command: dns
+  - name: iam
+    url: exoscale-iam.arazzo.yaml
+    type: arazzo
+    x-ezu-command: iam
+  - name: kms
+    url: exoscale-kms.arazzo.yaml
+    type: arazzo
+    x-ezu-command: kms
+  - name: ai
+    url: exoscale-ai.arazzo.yaml
+    type: arazzo
+    x-ezu-command: ai
+  - name: networking
+    url: exoscale-networking.arazzo.yaml
+    type: arazzo
+    x-ezu-command: networking
 workflows:
   - workflowId: zone-list
     x-ezu-command: zone list
@@ -43,3 +71,254 @@ workflows:
           zones: $response.body#/zones
     outputs:
       zones: $steps.list.outputs.zones
+
+  # ---- quotas ----
+
+  - workflowId: limit-list
+    x-ezu-command: limit list
+    summary: List the organization's quotas and their usage.
+    steps:
+      - stepId: list
+        operationId: list-quotas
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          quotas: $response.body#/quotas
+    outputs:
+      quotas: $steps.list.outputs.quotas
+
+  - workflowId: limit-show
+    x-ezu-command: limit show
+    summary: Show the quota of one kind of resource.
+    x-ezu-args: [entity]
+    inputs:
+      type: object
+      required: [entity]
+      properties:
+        entity:
+          type: string
+          description: Resource kind, as limit list names it (instance, gpu, sks-cluster…)
+    steps:
+      - stepId: show
+        operationId: get-quota
+        parameters:
+          - name: entity
+            in: path
+            value: $inputs.entity
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          quota: $response.body
+    outputs:
+      quota: $steps.show.outputs.quota
+
+  # ---- events ----
+
+  - workflowId: event-list
+    x-ezu-command: event list
+    summary: List the organization's events (API calls) over a period.
+    inputs:
+      type: object
+      properties:
+        from:
+          type: string
+          description: Start of the period, as 2026-10-01T00:00:00Z
+        to:
+          type: string
+          description: End of the period
+    steps:
+      - stepId: list
+        operationId: list-events
+        parameters:
+          - name: from
+            in: query
+            value: $inputs.from
+          - name: to
+            in: query
+            value: $inputs.to
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          events: $response.body
+    outputs:
+      events: $steps.list.outputs.events
+
+  # ---- organization ----
+
+  - workflowId: organization-show
+    x-ezu-command: organization show
+    summary: Show the organization.
+    steps:
+      - stepId: show
+        operationId: get-organization
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          organization: $response.body
+    outputs:
+      organization: $steps.show.outputs.organization
+
+  - workflowId: organization-balance
+    x-ezu-command: organization balance
+    summary: Show the organization's live balance.
+    steps:
+      - stepId: show
+        operationId: get-live-balance
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          balance: $response.body
+    outputs:
+      balance: $steps.show.outputs.balance
+
+  - workflowId: organization-usage
+    x-ezu-command: organization usage
+    summary: Show the organization's usage report for a period.
+    inputs:
+      type: object
+      properties:
+        period:
+          type: string
+          description: Month, as 2026-09; the current one by default
+    steps:
+      - stepId: show
+        operationId: get-usage-report
+        parameters:
+          - name: period
+            in: query
+            value: $inputs.period
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          usage: $response.body#/usage
+    outputs:
+      usage: $steps.show.outputs.usage
+
+  - workflowId: organization-impact
+    x-ezu-command: organization impact
+    summary: Show the organization's environmental impact report for a month.
+    x-ezu-args: [period]
+    inputs:
+      type: object
+      required: [period]
+      properties:
+        period:
+          type: string
+          description: Month, as 2026-09
+    steps:
+      - stepId: show
+        operationId: get-env-impact
+        parameters:
+          - name: period
+            in: path
+            value: $inputs.period
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          impact: $response.body
+    outputs:
+      impact: $steps.show.outputs.impact
+
+  - workflowId: organization-impact-report
+    x-ezu-command: organization impact-report
+    summary: Show the environmental impact of the organization's usage over a period.
+    inputs:
+      type: object
+      properties:
+        from:
+          type: string
+          description: Start of the period, as 2026-09-01
+        to:
+          type: string
+          description: End of the period
+    steps:
+      - stepId: show
+        operationId: get-impact-report
+        parameters:
+          - name: from
+            in: query
+            value: $inputs.from
+          - name: to
+            in: query
+            value: $inputs.to
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          report: $response.body
+    outputs:
+      report: $steps.show.outputs.report
+
+  - workflowId: organization-impact-estimate
+    x-ezu-command: organization impact-estimate
+    summary: Estimate the environmental impact of using a product.
+    x-ezu-args: [sku]
+    inputs:
+      type: object
+      required: [sku]
+      properties:
+        sku:
+          type: string
+          description: Product SKU
+        metadata:
+          type: object
+          description: Usage details, as metadata.KEY=VALUE
+    steps:
+      - stepId: estimate
+        operationId: get-impact-estimate
+        requestBody:
+          contentType: application/json
+          payload:
+            sku: $inputs.sku
+            metadata: $inputs.metadata
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          impact: $response.body#/impact
+    outputs:
+      impact: $steps.estimate.outputs.impact
+
+  # ---- object storage ----
+
+  - workflowId: storage-usage
+    x-ezu-command: storage usage
+    summary: List the usage of the organization's object storage buckets.
+    steps:
+      - stepId: list
+        operationId: list-sos-buckets-usage
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          buckets: $response.body#/sos-buckets-usage
+    outputs:
+      buckets: $steps.list.outputs.buckets
+
+  - workflowId: storage-presign
+    x-ezu-command: storage presign
+    summary: Make a presigned URL to download an object of a bucket.
+    x-ezu-args: [bucket, key]
+    inputs:
+      type: object
+      required: [bucket, key]
+      properties:
+        bucket:
+          type: string
+          description: Bucket name
+        key:
+          type: string
+          description: Object key
+    steps:
+      - stepId: presign
+        operationId: get-sos-presigned-url
+        parameters:
+          - name: bucket
+            in: path
+            value: $inputs.bucket
+          - name: key
+            in: query
+            value: $inputs.key
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          url: $response.body#/url
+    outputs:
+      url: $steps.presign.outputs.url

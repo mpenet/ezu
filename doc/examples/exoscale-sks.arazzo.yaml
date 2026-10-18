@@ -1,0 +1,1566 @@
+# Exoscale's `exo compute sks` commands as Arazzo workflows, mounted by
+# exoscale-compute.arazzo.yaml as `exo compute sks`: Kubernetes clusters and
+# their nodepools, named by name or id; changes wait for their job to finish
+# and show the result.
+arazzo: 1.1.0
+info:
+  title: Exoscale SKS
+  summary: Kubernetes clusters and their nodepools.
+  version: 1.0.0
+sourceDescriptions:
+  - name: exoscale
+    url: https://openapi-v2.exoscale.com/source.json
+    type: openapi
+  # finding ids by name, waiting for jobs
+  - name: common
+    url: exoscale-common.arazzo.yaml
+    type: arazzo
+workflows:
+  # ---- finding ids ----
+
+  - workflowId: cluster-id
+    summary: The id of an SKS cluster, given its name or id.
+    x-ezu-args: [cluster]
+    inputs:
+      type: object
+      required: [cluster]
+      properties:
+        cluster:
+          type: string
+          description: Cluster name or id
+    steps:
+      - stepId: find
+        operationId: list-sks-clusters
+        successCriteria:
+          - condition: $statusCode == 200
+          - context: $response.body
+            type: jsonpath
+            condition: "$['sks-clusters'][?@.name == '{$inputs.cluster}' || @.id == '{$inputs.cluster}']"
+        outputs:
+          id:
+            context: $response.body
+            type: jsonpath
+            selector: "$['sks-clusters'][?@.name == '{$inputs.cluster}' || @.id == '{$inputs.cluster}'].id"
+    outputs:
+      id: $steps.find.outputs.id
+
+  - workflowId: nodepool-id
+    summary: The ids of an SKS cluster and of one of its nodepools, given their names or ids.
+    x-ezu-args: [cluster, nodepool]
+    inputs:
+      type: object
+      required: [cluster, nodepool]
+      properties:
+        cluster:
+          type: string
+          description: Cluster name or id
+        nodepool:
+          type: string
+          description: Nodepool name or id
+    steps:
+      - stepId: cluster
+        workflowId: cluster-id
+        parameters:
+          - name: cluster
+            value: $inputs.cluster
+      - stepId: find
+        operationId: get-sks-cluster
+        parameters:
+          - name: id
+            in: path
+            value: $steps.cluster.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+          - context: $response.body
+            type: jsonpath
+            condition: "$.nodepools[?@.name == '{$inputs.nodepool}' || @.id == '{$inputs.nodepool}']"
+        outputs:
+          id:
+            context: $response.body
+            type: jsonpath
+            selector: "$.nodepools[?@.name == '{$inputs.nodepool}' || @.id == '{$inputs.nodepool}'].id"
+    outputs:
+      cluster: $steps.cluster.outputs.id
+      id: $steps.find.outputs.id
+
+  - workflowId: instance-type-id
+    summary: The id of an instance type, given its family and size.
+    x-ezu-args: [family, size]
+    inputs:
+      type: object
+      required: [family, size]
+      properties:
+        family:
+          type: string
+          description: Instance type family (standard, cpu, memory…)
+        size:
+          type: string
+          description: Instance type size (micro, small, medium, large…)
+    steps:
+      - stepId: find
+        operationId: list-instance-types
+        successCriteria:
+          - condition: $statusCode == 200
+          - context: $response.body
+            type: jsonpath
+            condition: "$['instance-types'][?@.family == '{$inputs.family}' && @.size == '{$inputs.size}']"
+        outputs:
+          id:
+            context: $response.body
+            type: jsonpath
+            selector: "$['instance-types'][?@.family == '{$inputs.family}' && @.size == '{$inputs.size}'].id"
+    outputs:
+      id: $steps.find.outputs.id
+
+  # ---- clusters ----
+
+  - workflowId: list
+    x-ezu-command: list
+    summary: List the SKS clusters of the zone.
+    steps:
+      - stepId: list
+        operationId: list-sks-clusters
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          clusters: $response.body#/sks-clusters
+    outputs:
+      clusters: $steps.list.outputs.clusters
+
+  - workflowId: show
+    x-ezu-command: show
+    summary: Show an SKS cluster.
+    x-ezu-args: [cluster]
+    inputs:
+      type: object
+      required: [cluster]
+      properties:
+        cluster:
+          type: string
+          description: Cluster name or id
+    steps:
+      - stepId: find
+        workflowId: cluster-id
+        parameters:
+          - name: cluster
+            value: $inputs.cluster
+      - stepId: show
+        operationId: get-sks-cluster
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          cluster: $response.body
+    outputs:
+      cluster: $steps.show.outputs.cluster
+
+  - workflowId: create
+    x-ezu-command: create
+    summary: Create an SKS cluster, optionally with a nodepool named after it, wait until it exists, and show it.
+    x-ezu-args: [name]
+    inputs:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          description: Cluster name
+        description:
+          type: string
+          description: Cluster description
+        version:
+          type: string
+          description: Control plane Kubernetes version (see versions), or latest
+          default: latest
+        level:
+          type: string
+          enum: [starter, pro]
+          description: Control plane service level
+          default: pro
+        cni:
+          type: string
+          enum: [calico, cilium]
+          description: CNI plugin to deploy
+          default: calico
+        addons:
+          type: array
+          items:
+            type: string
+            enum: [exoscale-cloud-controller, exoscale-container-storage-interface, metrics-server, karpenter]
+          description: Addons to deploy, as addons=NAME, repeated
+          default: [exoscale-cloud-controller, metrics-server]
+        auto-upgrade:
+          type: boolean
+          description: Upgrade the control plane to the latest patch version automatically
+        enable-kube-proxy:
+          type: boolean
+          description: Deploy the Kubernetes network proxy (by default, unless the CNI is cilium)
+        feature-gates:
+          type: array
+          items:
+            type: string
+          description: Kubernetes alpha features to enable on the API server, as feature-gates=NAME, repeated
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+          description: Labels, as labels.KEY=VALUE
+        oidc-client-id:
+          type: string
+          description: OpenID client id (with oidc-issuer-url, enables OpenID authentication)
+        oidc-issuer-url:
+          type: string
+          description: OpenID provider URL
+        oidc-username-claim:
+          type: string
+          description: OpenID JWT claim to use as the user name
+        oidc-username-prefix:
+          type: string
+          description: OpenID prefix prepended to username claims
+        oidc-groups-claim:
+          type: string
+          description: OpenID JWT claim to use as the user's group
+        oidc-groups-prefix:
+          type: string
+          description: OpenID prefix prepended to group claims
+        oidc-required-claim:
+          type: object
+          additionalProperties:
+            type: string
+          description: OpenID token required claims, as oidc-required-claim.KEY=VALUE
+        audit-endpoint:
+          type: string
+          description: Kubernetes audit endpoint URL (with audit-bearer-token, enables audit logging)
+        audit-bearer-token:
+          type: string
+          description: Bearer token for the Kubernetes audit endpoint
+        audit-initial-backoff:
+          type: string
+          description: Initial backoff of Kubernetes audit endpoint retries (10s by default)
+        nodepool-size:
+          type: integer
+          description: Number of nodes of a nodepool to add, named after the cluster; none by default
+        nodepool-instance-family:
+          type: string
+          description: Instance type family of the nodepool's nodes
+          default: standard
+        nodepool-instance-size:
+          type: string
+          description: Instance type size of the nodepool's nodes
+          default: medium
+        nodepool-disk-size:
+          type: integer
+          description: Disk size of the nodepool's nodes, in GiB
+          default: 50
+        nodepool-security-group:
+          type: string
+          description: Name or id of a security group of the nodepool's nodes
+        nodepool-anti-affinity-group:
+          type: string
+          description: Name or id of an anti-affinity group of the nodepool's nodes
+        nodepool-private-network:
+          type: string
+          description: Name or id of a private network to attach the nodepool's nodes to
+    steps:
+      # the version asked for, or the latest (the API lists the latest first)
+      - stepId: version
+        operationId: list-sks-cluster-versions
+        successCriteria:
+          - condition: $statusCode == 200
+          - context: $response.body
+            type: jsonpath
+            condition: "$['sks-cluster-versions'][?@ == '{$inputs.version}' || ('{$inputs.version}' == 'latest' && @ == $['sks-cluster-versions'][0])]"
+        outputs:
+          version:
+            context: $response.body
+            type: jsonpath
+            selector: "$['sks-cluster-versions'][?@ == '{$inputs.version}' || ('{$inputs.version}' == 'latest' && @ == $['sks-cluster-versions'][0])]"
+      - stepId: create
+        operationId: create-sks-cluster
+        requestBody:
+          contentType: application/json
+          payload:
+            name: $inputs.name
+            description: $inputs.description
+            version: $steps.version.outputs.version
+            level: $inputs.level
+            cni: $inputs.cni
+            addons: $inputs.addons
+            auto-upgrade: $inputs.auto-upgrade
+            enable-kube-proxy: $inputs.enable-kube-proxy
+            feature-gates: $inputs.feature-gates
+            labels: $inputs.labels
+            oidc:
+              client-id: $inputs.oidc-client-id
+              issuer-url: $inputs.oidc-issuer-url
+              username-claim: $inputs.oidc-username-claim
+              username-prefix: $inputs.oidc-username-prefix
+              groups-claim: $inputs.oidc-groups-claim
+              groups-prefix: $inputs.oidc-groups-prefix
+              required-claim: $inputs.oidc-required-claim
+            audit:
+              endpoint: $inputs.audit-endpoint
+              bearer-token: $inputs.audit-bearer-token
+              initial-backoff: $inputs.audit-initial-backoff
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: created
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.create.outputs.job
+        onSuccess:
+          - name: no-nodepool
+            type: goto
+            stepId: show
+            criteria:
+              - condition: $inputs.nodepool-size == null
+      - stepId: nodepool
+        workflowId: nodepool-add
+        parameters:
+          - name: cluster
+            value: $steps.created.outputs.reference
+          - name: name
+            value: $inputs.name
+          - name: size
+            value: $inputs.nodepool-size
+          - name: instance-family
+            value: $inputs.nodepool-instance-family
+          - name: instance-size
+            value: $inputs.nodepool-instance-size
+          - name: disk-size
+            value: $inputs.nodepool-disk-size
+          - name: security-group
+            value: $inputs.nodepool-security-group
+          - name: anti-affinity-group
+            value: $inputs.nodepool-anti-affinity-group
+          - name: private-network
+            value: $inputs.nodepool-private-network
+      - stepId: show
+        workflowId: show
+        parameters:
+          - name: cluster
+            value: $steps.created.outputs.reference
+    outputs:
+      cluster: $steps.show.outputs.cluster
+
+  - workflowId: update
+    x-ezu-command: update
+    summary: Change an SKS cluster's name, description, labels, addons, OpenID or audit settings.
+    x-ezu-args: [cluster]
+    inputs:
+      type: object
+      required: [cluster]
+      properties:
+        cluster:
+          type: string
+          description: Cluster name or id
+        name:
+          type: string
+          description: New name
+        description:
+          type: string
+          description: Cluster description
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+          description: Labels, as labels.KEY=VALUE; they replace the current ones
+        auto-upgrade:
+          type: boolean
+          description: Upgrade the control plane to the latest patch version automatically
+        enable-operators-ca:
+          type: boolean
+          description: Trust the operators certificate authority on the API server
+        addons:
+          type: array
+          items:
+            type: string
+            enum: [exoscale-cloud-controller, exoscale-container-storage-interface, metrics-server, karpenter]
+          description: Addons, as addons=NAME, repeated; they replace the current ones
+        feature-gates:
+          type: array
+          items:
+            type: string
+          description: Kubernetes alpha features to enable on the API server, as feature-gates=NAME, repeated
+        oidc-client-id:
+          type: string
+          description: OpenID client id
+        oidc-issuer-url:
+          type: string
+          description: OpenID provider URL
+        oidc-username-claim:
+          type: string
+          description: OpenID JWT claim to use as the user name
+        oidc-username-prefix:
+          type: string
+          description: OpenID prefix prepended to username claims
+        oidc-groups-claim:
+          type: string
+          description: OpenID JWT claim to use as the user's group
+        oidc-groups-prefix:
+          type: string
+          description: OpenID prefix prepended to group claims
+        oidc-required-claim:
+          type: object
+          additionalProperties:
+            type: string
+          description: OpenID token required claims, as oidc-required-claim.KEY=VALUE
+        audit-enabled:
+          type: boolean
+          description: Enable or disable Kubernetes audit logging
+        audit-endpoint:
+          type: string
+          description: Kubernetes audit endpoint URL
+        audit-bearer-token:
+          type: string
+          description: Bearer token for the Kubernetes audit endpoint
+        audit-initial-backoff:
+          type: string
+          description: Initial backoff of Kubernetes audit endpoint retries
+    steps:
+      - stepId: find
+        workflowId: cluster-id
+        parameters:
+          - name: cluster
+            value: $inputs.cluster
+      - stepId: update
+        operationId: update-sks-cluster
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            name: $inputs.name
+            description: $inputs.description
+            labels: $inputs.labels
+            auto-upgrade: $inputs.auto-upgrade
+            enable-operators-ca: $inputs.enable-operators-ca
+            addons: $inputs.addons
+            feature-gates: $inputs.feature-gates
+            oidc:
+              client-id: $inputs.oidc-client-id
+              issuer-url: $inputs.oidc-issuer-url
+              username-claim: $inputs.oidc-username-claim
+              username-prefix: $inputs.oidc-username-prefix
+              groups-claim: $inputs.oidc-groups-claim
+              groups-prefix: $inputs.oidc-groups-prefix
+              required-claim: $inputs.oidc-required-claim
+            audit:
+              enabled: $inputs.audit-enabled
+              endpoint: $inputs.audit-endpoint
+              bearer-token: $inputs.audit-bearer-token
+              initial-backoff: $inputs.audit-initial-backoff
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.update.outputs.job
+      - stepId: show
+        workflowId: show
+        parameters:
+          - name: cluster
+            value: $steps.find.outputs.id
+    outputs:
+      cluster: $steps.show.outputs.cluster
+
+  - workflowId: delete
+    x-ezu-command: delete
+    summary: Delete an SKS cluster and wait until it is gone.
+    x-ezu-args: [cluster]
+    inputs:
+      type: object
+      required: [cluster]
+      properties:
+        cluster:
+          type: string
+          description: Cluster name or id
+    steps:
+      - stepId: find
+        workflowId: cluster-id
+        parameters:
+          - name: cluster
+            value: $inputs.cluster
+      - stepId: delete
+        operationId: delete-sks-cluster
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.delete.outputs.job
+    outputs:
+      deleted: $steps.find.outputs.id
+
+  - workflowId: upgrade
+    x-ezu-command: upgrade
+    summary: Upgrade an SKS cluster's control plane to another Kubernetes version.
+    x-ezu-args: [cluster, version]
+    inputs:
+      type: object
+      required: [cluster, version]
+      properties:
+        cluster:
+          type: string
+          description: Cluster name or id
+        version:
+          type: string
+          description: Kubernetes version (see versions)
+    steps:
+      - stepId: find
+        workflowId: cluster-id
+        parameters:
+          - name: cluster
+            value: $inputs.cluster
+      - stepId: upgrade
+        operationId: upgrade-sks-cluster
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            version: $inputs.version
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.upgrade.outputs.job
+      - stepId: show
+        workflowId: show
+        parameters:
+          - name: cluster
+            value: $steps.find.outputs.id
+    outputs:
+      cluster: $steps.show.outputs.cluster
+
+  - workflowId: upgrade-service-level
+    x-ezu-command: upgrade-service-level
+    summary: Upgrade an SKS cluster from the starter to the pro service level.
+    x-ezu-args: [cluster]
+    inputs:
+      type: object
+      required: [cluster]
+      properties:
+        cluster:
+          type: string
+          description: Cluster name or id
+    steps:
+      - stepId: find
+        workflowId: cluster-id
+        parameters:
+          - name: cluster
+            value: $inputs.cluster
+      - stepId: upgrade
+        operationId: upgrade-sks-cluster-service-level
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.upgrade.outputs.job
+      - stepId: show
+        workflowId: show
+        parameters:
+          - name: cluster
+            value: $steps.find.outputs.id
+    outputs:
+      cluster: $steps.show.outputs.cluster
+
+  - workflowId: versions
+    x-ezu-command: versions
+    summary: List the Kubernetes versions SKS clusters can run, latest first.
+    inputs:
+      type: object
+      properties:
+        include-deprecated:
+          type: boolean
+          description: Include deprecated versions
+    steps:
+      - stepId: list
+        operationId: list-sks-cluster-versions
+        parameters:
+          - name: include-deprecated
+            in: query
+            value: $inputs.include-deprecated
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          versions: $response.body#/sks-cluster-versions
+    outputs:
+      versions: $steps.list.outputs.versions
+
+  - workflowId: kubeconfig
+    x-ezu-command: kubeconfig
+    summary: Generate a kubeconfig for a user of an SKS cluster, base64-encoded.
+    x-ezu-args: [cluster, user]
+    inputs:
+      type: object
+      required: [cluster, user]
+      properties:
+        cluster:
+          type: string
+          description: Cluster name or id
+        user:
+          type: string
+          description: User name, the client certificate's CN
+        groups:
+          type: array
+          items:
+            type: string
+          description: Groups of the client certificate (its O), as groups=NAME, repeated
+          default: [system:masters]
+        ttl:
+          type: integer
+          description: Validity of the client certificate, in seconds (30 days by default)
+    steps:
+      - stepId: find
+        workflowId: cluster-id
+        parameters:
+          - name: cluster
+            value: $inputs.cluster
+      - stepId: generate
+        operationId: generate-sks-cluster-kubeconfig
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            user: $inputs.user
+            groups: $inputs.groups
+            ttl: $inputs.ttl
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          kubeconfig: $response.body#/kubeconfig
+    outputs:
+      kubeconfig: $steps.generate.outputs.kubeconfig
+
+  - workflowId: authority-cert
+    x-ezu-command: authority-cert
+    summary: Show the certificate of one of an SKS cluster's certificate authorities, base64-encoded.
+    x-ezu-args: [cluster, authority]
+    inputs:
+      type: object
+      required: [cluster, authority]
+      properties:
+        cluster:
+          type: string
+          description: Cluster name or id
+        authority:
+          type: string
+          enum: [control-plane, aggregation, kubelet]
+          description: Certificate authority
+    steps:
+      - stepId: find
+        workflowId: cluster-id
+        parameters:
+          - name: cluster
+            value: $inputs.cluster
+      - stepId: cert
+        operationId: get-sks-cluster-authority-cert
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+          - name: authority
+            in: path
+            value: $inputs.authority
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          cacert: $response.body#/cacert
+    outputs:
+      cacert: $steps.cert.outputs.cacert
+
+  - workflowId: deprecated-resources
+    x-ezu-command: deprecated-resources
+    summary: List the deprecated Kubernetes resources an SKS cluster uses.
+    x-ezu-args: [cluster]
+    inputs:
+      type: object
+      required: [cluster]
+      properties:
+        cluster:
+          type: string
+          description: Cluster name or id
+    steps:
+      - stepId: find
+        workflowId: cluster-id
+        parameters:
+          - name: cluster
+            value: $inputs.cluster
+      - stepId: list
+        operationId: list-sks-cluster-deprecated-resources
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          resources: $response.body
+    outputs:
+      resources: $steps.list.outputs.resources
+
+  - workflowId: inspect
+    x-ezu-command: inspect
+    summary: Show the result of the latest inspection of an SKS cluster.
+    x-ezu-args: [cluster]
+    inputs:
+      type: object
+      required: [cluster]
+      properties:
+        cluster:
+          type: string
+          description: Cluster name or id
+    steps:
+      - stepId: find
+        workflowId: cluster-id
+        parameters:
+          - name: cluster
+            value: $inputs.cluster
+      - stepId: inspect
+        operationId: get-sks-cluster-inspection
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          inspection: $response.body
+    outputs:
+      inspection: $steps.inspect.outputs.inspection
+
+  - workflowId: rotate-ccm-credentials
+    x-ezu-command: rotate-ccm-credentials
+    summary: Rotate the credentials of an SKS cluster's Exoscale cloud controller manager.
+    x-ezu-args: [cluster]
+    inputs:
+      type: object
+      required: [cluster]
+      properties:
+        cluster:
+          type: string
+          description: Cluster name or id
+    steps:
+      - stepId: find
+        workflowId: cluster-id
+        parameters:
+          - name: cluster
+            value: $inputs.cluster
+      - stepId: rotate
+        operationId: rotate-sks-ccm-credentials
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.rotate.outputs.job
+      - stepId: show
+        workflowId: show
+        parameters:
+          - name: cluster
+            value: $steps.find.outputs.id
+    outputs:
+      cluster: $steps.show.outputs.cluster
+
+  - workflowId: rotate-csi-credentials
+    x-ezu-command: rotate-csi-credentials
+    summary: Rotate the credentials of an SKS cluster's Exoscale container storage interface.
+    x-ezu-args: [cluster]
+    inputs:
+      type: object
+      required: [cluster]
+      properties:
+        cluster:
+          type: string
+          description: Cluster name or id
+    steps:
+      - stepId: find
+        workflowId: cluster-id
+        parameters:
+          - name: cluster
+            value: $inputs.cluster
+      - stepId: rotate
+        operationId: rotate-sks-csi-credentials
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.rotate.outputs.job
+      - stepId: show
+        workflowId: show
+        parameters:
+          - name: cluster
+            value: $steps.find.outputs.id
+    outputs:
+      cluster: $steps.show.outputs.cluster
+
+  - workflowId: rotate-karpenter-credentials
+    x-ezu-command: rotate-karpenter-credentials
+    summary: Rotate the credentials of an SKS cluster's Karpenter addon.
+    x-ezu-args: [cluster]
+    inputs:
+      type: object
+      required: [cluster]
+      properties:
+        cluster:
+          type: string
+          description: Cluster name or id
+    steps:
+      - stepId: find
+        workflowId: cluster-id
+        parameters:
+          - name: cluster
+            value: $inputs.cluster
+      - stepId: rotate
+        operationId: rotate-sks-karpenter-credentials
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.rotate.outputs.job
+      - stepId: show
+        workflowId: show
+        parameters:
+          - name: cluster
+            value: $steps.find.outputs.id
+    outputs:
+      cluster: $steps.show.outputs.cluster
+
+  - workflowId: rotate-operators-ca
+    x-ezu-command: rotate-operators-ca
+    summary: Rotate the operators certificate authority of an SKS cluster.
+    x-ezu-args: [cluster]
+    inputs:
+      type: object
+      required: [cluster]
+      properties:
+        cluster:
+          type: string
+          description: Cluster name or id
+    steps:
+      - stepId: find
+        workflowId: cluster-id
+        parameters:
+          - name: cluster
+            value: $inputs.cluster
+      - stepId: rotate
+        operationId: rotate-sks-operators-ca
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.rotate.outputs.job
+      - stepId: show
+        workflowId: show
+        parameters:
+          - name: cluster
+            value: $steps.find.outputs.id
+    outputs:
+      cluster: $steps.show.outputs.cluster
+
+  - workflowId: karpenter-manifest
+    x-ezu-command: karpenter-manifest
+    summary: Generate the Karpenter ExoscaleNodeClass and NodePool manifests of an SKS cluster, or one of them.
+    x-ezu-args: [cluster]
+    inputs:
+      type: object
+      required: [cluster]
+      properties:
+        cluster:
+          type: string
+          description: Cluster name or id
+        exoscale-nodeclass:
+          type: boolean
+          description: Generate the ExoscaleNodeClass manifest (with nodepool=true too, or neither, both are)
+        nodepool:
+          type: boolean
+          description: Generate the NodePool manifest (with exoscale-nodeclass=true too, or neither, both are)
+    steps:
+      - stepId: find
+        workflowId: cluster-id
+        parameters:
+          - name: cluster
+            value: $inputs.cluster
+        onSuccess:
+          - name: nodepool-only
+            type: goto
+            stepId: nodepool
+            criteria:
+              - condition: $inputs.nodepool == true && $inputs.exoscale-nodeclass != true
+      - stepId: nodeclass
+        operationId: generate-sks-karpenter-exoscale-nodeclass
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          manifest: $response.body#/exoscale-nodeclass
+        onSuccess:
+          - name: nodeclass-only
+            type: end
+            criteria:
+              - condition: $inputs.exoscale-nodeclass == true && $inputs.nodepool != true
+      - stepId: nodepool
+        operationId: generate-sks-karpenter-nodepool
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          manifest: $response.body#/nodepool
+    outputs:
+      exoscale-nodeclass: $steps.nodeclass.outputs.manifest
+      nodepool: $steps.nodepool.outputs.manifest
+
+  - workflowId: active-nodepool-templates
+    x-ezu-command: active-nodepool-templates
+    summary: Show the id of the template that nodepools of a Kubernetes version currently use.
+    x-ezu-args: [kube-version]
+    inputs:
+      type: object
+      required: [kube-version]
+      properties:
+        kube-version:
+          type: string
+          description: Kubernetes version (see versions)
+        variant:
+          type: string
+          enum: [standard, nvidia]
+          description: Template variant
+          default: standard
+    steps:
+      - stepId: template
+        operationId: get-active-nodepool-template
+        parameters:
+          - name: kube-version
+            in: path
+            value: $inputs.kube-version
+          - name: variant
+            in: path
+            value: $inputs.variant
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          template: $response.body#/active-template
+    outputs:
+      template: $steps.template.outputs.template
+
+  # ---- nodepools ----
+
+  - workflowId: nodepool-list
+    x-ezu-command: nodepool list
+    summary: List the nodepools of an SKS cluster.
+    x-ezu-args: [cluster]
+    inputs:
+      type: object
+      required: [cluster]
+      properties:
+        cluster:
+          type: string
+          description: Cluster name or id
+    steps:
+      - stepId: find
+        workflowId: cluster-id
+        parameters:
+          - name: cluster
+            value: $inputs.cluster
+      - stepId: list
+        operationId: get-sks-cluster
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          nodepools: $response.body#/nodepools
+    outputs:
+      nodepools: $steps.list.outputs.nodepools
+
+  - workflowId: nodepool-show
+    x-ezu-command: nodepool show
+    summary: Show a nodepool of an SKS cluster.
+    x-ezu-args: [cluster, nodepool]
+    inputs:
+      type: object
+      required: [cluster, nodepool]
+      properties:
+        cluster:
+          type: string
+          description: Cluster name or id
+        nodepool:
+          type: string
+          description: Nodepool name or id
+    steps:
+      - stepId: find
+        workflowId: nodepool-id
+        parameters:
+          - name: cluster
+            value: $inputs.cluster
+          - name: nodepool
+            value: $inputs.nodepool
+      - stepId: show
+        operationId: get-sks-nodepool
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.cluster
+          - name: sks-nodepool-id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          nodepool: $response.body
+    outputs:
+      nodepool: $steps.show.outputs.nodepool
+
+  - workflowId: nodepool-add
+    x-ezu-command: nodepool add
+    summary: Add a nodepool to an SKS cluster, wait until it exists, and show it.
+    x-ezu-args: [cluster, name]
+    inputs:
+      type: object
+      required: [cluster, name]
+      properties:
+        cluster:
+          type: string
+          description: Cluster name or id
+        name:
+          type: string
+          description: Nodepool name, lowercase
+        description:
+          type: string
+          description: Nodepool description
+        size:
+          type: integer
+          description: Number of nodes
+          default: 2
+        instance-family:
+          type: string
+          description: Instance type family of the nodes (standard, cpu, memory…)
+          default: standard
+        instance-size:
+          type: string
+          description: Instance type size of the nodes (micro, small, medium, large…)
+          default: medium
+        disk-size:
+          type: integer
+          description: Disk size of the nodes, in GiB
+          default: 50
+        instance-prefix:
+          type: string
+          description: Prefix of the nodes' names (pool by default)
+        public-ip:
+          type: string
+          enum: [inet4, dual]
+          description: Public IP addresses to assign to the nodes
+          default: inet4
+        security-group:
+          type: string
+          description: Name or id of a security group of the nodes
+        anti-affinity-group:
+          type: string
+          description: Name or id of an anti-affinity group of the nodes
+        private-network:
+          type: string
+          description: Name or id of a private network to attach the nodes to
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+          description: Labels, as labels.KEY=VALUE
+        taints:
+          type: object
+          additionalProperties:
+            type: object
+            required: [value, effect]
+            properties:
+              value:
+                type: string
+              effect:
+                type: string
+                enum: [NoExecute, NoSchedule, PreferNoSchedule]
+          description: Kubernetes taints of the nodes, as taints.KEY.value=VALUE taints.KEY.effect=EFFECT
+        addons:
+          type: array
+          items:
+            type: string
+            enum: [storage-lvm]
+          description: Nodepool addons, as addons=NAME
+        image-gc-low-threshold:
+          type: integer
+          description: Percent of disk usage under which image garbage collection never runs
+        image-gc-high-threshold:
+          type: integer
+          description: Percent of disk usage over which image garbage collection always runs
+        image-gc-min-age:
+          type: string
+          description: How long an image stays unused before it can be garbage collected (2m, 1h…)
+    steps:
+      - stepId: find
+        workflowId: cluster-id
+        parameters:
+          - name: cluster
+            value: $inputs.cluster
+      - stepId: instance-type
+        workflowId: instance-type-id
+        parameters:
+          - name: family
+            value: $inputs.instance-family
+          - name: size
+            value: $inputs.instance-size
+        onSuccess:
+          - name: no-groups-or-network
+            type: goto
+            stepId: create
+            criteria:
+              - condition: $inputs.security-group == null && $inputs.anti-affinity-group == null && $inputs.private-network == null
+          - name: network-only
+            type: goto
+            stepId: private-network
+            criteria:
+              - condition: $inputs.security-group == null && $inputs.anti-affinity-group == null
+          - name: no-security-group
+            type: goto
+            stepId: anti-affinity-group
+            criteria:
+              - condition: $inputs.security-group == null
+      - stepId: security-group
+        workflowId: $sourceDescriptions.common.security-group-id
+        parameters:
+          - name: security-group
+            value: $inputs.security-group
+        onSuccess:
+          - name: no-anti-affinity-group-or-network
+            type: goto
+            stepId: create
+            criteria:
+              - condition: $inputs.anti-affinity-group == null && $inputs.private-network == null
+          - name: no-anti-affinity-group
+            type: goto
+            stepId: private-network
+            criteria:
+              - condition: $inputs.anti-affinity-group == null
+      - stepId: anti-affinity-group
+        workflowId: $sourceDescriptions.common.anti-affinity-group-id
+        parameters:
+          - name: anti-affinity-group
+            value: $inputs.anti-affinity-group
+        onSuccess:
+          - name: no-network
+            type: goto
+            stepId: create
+            criteria:
+              - condition: $inputs.private-network == null
+      - stepId: private-network
+        workflowId: $sourceDescriptions.common.private-network-id
+        parameters:
+          - name: private-network
+            value: $inputs.private-network
+      - stepId: create
+        operationId: create-sks-nodepool
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            name: $inputs.name
+            description: $inputs.description
+            size: $inputs.size
+            instance-type:
+              id: $steps.instance-type.outputs.id
+            disk-size: $inputs.disk-size
+            instance-prefix: $inputs.instance-prefix
+            public-ip-assignment: $inputs.public-ip
+            security-groups:
+              - id: $steps.security-group.outputs.id
+            anti-affinity-groups:
+              - id: $steps.anti-affinity-group.outputs.id
+            private-networks:
+              - id: $steps.private-network.outputs.id
+            labels: $inputs.labels
+            taints: $inputs.taints
+            addons: $inputs.addons
+            kubelet-image-gc:
+              low-threshold: $inputs.image-gc-low-threshold
+              high-threshold: $inputs.image-gc-high-threshold
+              min-age: $inputs.image-gc-min-age
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: created
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.create.outputs.job
+      - stepId: show
+        workflowId: nodepool-show
+        parameters:
+          - name: cluster
+            value: $steps.find.outputs.id
+          - name: nodepool
+            value: $steps.created.outputs.reference
+    outputs:
+      nodepool: $steps.show.outputs.nodepool
+
+  - workflowId: nodepool-update
+    x-ezu-command: nodepool update
+    summary: Change a nodepool's name, description, instance type, disk size, labels or taints.
+    x-ezu-args: [cluster, nodepool]
+    inputs:
+      type: object
+      required: [cluster, nodepool]
+      properties:
+        cluster:
+          type: string
+          description: Cluster name or id
+        nodepool:
+          type: string
+          description: Nodepool name or id
+        name:
+          type: string
+          description: New name, lowercase
+        description:
+          type: string
+          description: Nodepool description
+        instance-family:
+          type: string
+          description: Instance type family of new nodes, with instance-size
+          default: standard
+        instance-size:
+          type: string
+          description: Instance type size of new nodes (micro, small, medium, large…)
+        disk-size:
+          type: integer
+          description: Disk size of new nodes, in GiB
+        instance-prefix:
+          type: string
+          description: Prefix of new nodes' names
+        public-ip:
+          type: string
+          enum: [inet4, dual]
+          description: Public IP addresses to assign to new nodes
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+          description: Labels, as labels.KEY=VALUE; they replace the current ones
+        taints:
+          type: object
+          additionalProperties:
+            type: object
+            required: [value, effect]
+            properties:
+              value:
+                type: string
+              effect:
+                type: string
+                enum: [NoExecute, NoSchedule, PreferNoSchedule]
+          description: Kubernetes taints, as taints.KEY.value=VALUE taints.KEY.effect=EFFECT; they replace the current ones
+        image-gc-low-threshold:
+          type: integer
+          description: Percent of disk usage under which image garbage collection never runs
+        image-gc-high-threshold:
+          type: integer
+          description: Percent of disk usage over which image garbage collection always runs
+        image-gc-min-age:
+          type: string
+          description: How long an image stays unused before it can be garbage collected (2m, 1h…)
+    steps:
+      - stepId: find
+        workflowId: nodepool-id
+        parameters:
+          - name: cluster
+            value: $inputs.cluster
+          - name: nodepool
+            value: $inputs.nodepool
+        onSuccess:
+          - name: same-instance-type
+            type: goto
+            stepId: update
+            criteria:
+              - condition: $inputs.instance-size == null
+      - stepId: instance-type
+        workflowId: instance-type-id
+        parameters:
+          - name: family
+            value: $inputs.instance-family
+          - name: size
+            value: $inputs.instance-size
+      - stepId: update
+        operationId: update-sks-nodepool
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.cluster
+          - name: sks-nodepool-id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            name: $inputs.name
+            description: $inputs.description
+            instance-type:
+              id: $steps.instance-type.outputs.id
+            disk-size: $inputs.disk-size
+            instance-prefix: $inputs.instance-prefix
+            public-ip-assignment: $inputs.public-ip
+            labels: $inputs.labels
+            taints: $inputs.taints
+            kubelet-image-gc:
+              low-threshold: $inputs.image-gc-low-threshold
+              high-threshold: $inputs.image-gc-high-threshold
+              min-age: $inputs.image-gc-min-age
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.update.outputs.job
+      - stepId: show
+        workflowId: nodepool-show
+        parameters:
+          - name: cluster
+            value: $steps.find.outputs.cluster
+          - name: nodepool
+            value: $steps.find.outputs.id
+    outputs:
+      nodepool: $steps.show.outputs.nodepool
+
+  - workflowId: nodepool-scale
+    x-ezu-command: nodepool scale
+    summary: Change the number of nodes of a nodepool.
+    x-ezu-args: [cluster, nodepool, size]
+    inputs:
+      type: object
+      required: [cluster, nodepool, size]
+      properties:
+        cluster:
+          type: string
+          description: Cluster name or id
+        nodepool:
+          type: string
+          description: Nodepool name or id
+        size:
+          type: integer
+          description: Number of nodes
+    steps:
+      - stepId: find
+        workflowId: nodepool-id
+        parameters:
+          - name: cluster
+            value: $inputs.cluster
+          - name: nodepool
+            value: $inputs.nodepool
+      - stepId: scale
+        operationId: scale-sks-nodepool
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.cluster
+          - name: sks-nodepool-id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            size: $inputs.size
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.scale.outputs.job
+      - stepId: show
+        workflowId: nodepool-show
+        parameters:
+          - name: cluster
+            value: $steps.find.outputs.cluster
+          - name: nodepool
+            value: $steps.find.outputs.id
+    outputs:
+      nodepool: $steps.show.outputs.nodepool
+
+  - workflowId: nodepool-evict
+    x-ezu-command: nodepool evict
+    summary: Remove nodes from a nodepool, shrinking it.
+    x-ezu-args: [cluster, nodepool]
+    inputs:
+      type: object
+      required: [cluster, nodepool, instances]
+      properties:
+        cluster:
+          type: string
+          description: Cluster name or id
+        nodepool:
+          type: string
+          description: Nodepool name or id
+        instances:
+          type: array
+          items:
+            type: string
+          description: Ids of the nodes' instances, as instances=ID, repeated
+    steps:
+      - stepId: find
+        workflowId: nodepool-id
+        parameters:
+          - name: cluster
+            value: $inputs.cluster
+          - name: nodepool
+            value: $inputs.nodepool
+      - stepId: evict
+        operationId: evict-sks-nodepool-members
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.cluster
+          - name: sks-nodepool-id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            instances: $inputs.instances
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.evict.outputs.job
+      - stepId: show
+        workflowId: nodepool-show
+        parameters:
+          - name: cluster
+            value: $steps.find.outputs.cluster
+          - name: nodepool
+            value: $steps.find.outputs.id
+    outputs:
+      nodepool: $steps.show.outputs.nodepool
+
+  - workflowId: nodepool-delete
+    x-ezu-command: nodepool delete
+    summary: Delete a nodepool and wait until it is gone.
+    x-ezu-args: [cluster, nodepool]
+    inputs:
+      type: object
+      required: [cluster, nodepool]
+      properties:
+        cluster:
+          type: string
+          description: Cluster name or id
+        nodepool:
+          type: string
+          description: Nodepool name or id
+    steps:
+      - stepId: find
+        workflowId: nodepool-id
+        parameters:
+          - name: cluster
+            value: $inputs.cluster
+          - name: nodepool
+            value: $inputs.nodepool
+      - stepId: delete
+        operationId: delete-sks-nodepool
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.cluster
+          - name: sks-nodepool-id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.delete.outputs.job
+    outputs:
+      deleted: $steps.find.outputs.id

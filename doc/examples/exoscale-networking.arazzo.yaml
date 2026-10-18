@@ -1,0 +1,807 @@
+# Exoscale's `exo networking` commands as Arazzo workflows, mounted by
+# exoscale.arazzo.yaml as `exo networking`: VPCs, their subnets and routes,
+# named by name or id; changes that start a job wait for it and show the result.
+arazzo: 1.1.0
+info:
+  title: Exoscale networking
+  summary: VPCs, their subnets and routes.
+  version: 1.0.0
+sourceDescriptions:
+  - name: exoscale
+    url: https://openapi-v2.exoscale.com/source.json
+    type: openapi
+  # finding instance ids by name, waiting for jobs
+  - name: common
+    url: exoscale-common.arazzo.yaml
+    type: arazzo
+workflows:
+  # ---- finding ids ----
+
+  - workflowId: vpc-id
+    summary: The id of a VPC, given its name or id.
+    x-ezu-args: [vpc]
+    inputs:
+      type: object
+      required: [vpc]
+      properties:
+        vpc:
+          type: string
+          description: VPC name or id
+    steps:
+      - stepId: find
+        operationId: list-vpcs
+        successCriteria:
+          - condition: $statusCode == 200
+          - context: $response.body
+            type: jsonpath
+            condition: "$.vpcs[?@.name == '{$inputs.vpc}' || @.id == '{$inputs.vpc}']"
+        outputs:
+          id:
+            context: $response.body
+            type: jsonpath
+            selector: "$.vpcs[?@.name == '{$inputs.vpc}' || @.id == '{$inputs.vpc}'].id"
+    outputs:
+      id: $steps.find.outputs.id
+
+  - workflowId: subnet-id
+    summary: The id of a subnet of a VPC, given its name or id.
+    x-ezu-args: [vpc-id, subnet]
+    inputs:
+      type: object
+      required: [vpc-id, subnet]
+      properties:
+        vpc-id:
+          type: string
+          description: VPC id
+        subnet:
+          type: string
+          description: Subnet name or id
+    steps:
+      - stepId: find
+        operationId: list-subnets
+        parameters:
+          - name: vpc-id
+            in: path
+            value: $inputs.vpc-id
+        successCriteria:
+          - condition: $statusCode == 200
+          - context: $response.body
+            type: jsonpath
+            condition: "$.subnets[?@.name == '{$inputs.subnet}' || @.id == '{$inputs.subnet}']"
+        outputs:
+          id:
+            context: $response.body
+            type: jsonpath
+            selector: "$.subnets[?@.name == '{$inputs.subnet}' || @.id == '{$inputs.subnet}'].id"
+    outputs:
+      id: $steps.find.outputs.id
+
+  # ---- VPCs ----
+
+  - workflowId: vpc-list
+    x-ezu-command: vpc list
+    summary: List the VPCs of the zone.
+    steps:
+      - stepId: list
+        operationId: list-vpcs
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          vpcs: $response.body#/vpcs
+    outputs:
+      vpcs: $steps.list.outputs.vpcs
+
+  - workflowId: vpc-show
+    x-ezu-command: vpc show
+    summary: Show a VPC.
+    x-ezu-args: [vpc]
+    inputs:
+      type: object
+      required: [vpc]
+      properties:
+        vpc:
+          type: string
+          description: VPC name or id
+    steps:
+      - stepId: find
+        workflowId: vpc-id
+        parameters:
+          - name: vpc
+            value: $inputs.vpc
+      - stepId: show
+        operationId: get-vpc
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          vpc: $response.body
+    outputs:
+      vpc: $steps.show.outputs.vpc
+
+  - workflowId: vpc-create
+    x-ezu-command: vpc create
+    summary: Create a VPC, wait until it exists, and show it.
+    x-ezu-args: [name]
+    inputs:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          description: VPC name
+        description:
+          type: string
+          description: Description
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+          description: Labels, as labels.KEY=VALUE
+    steps:
+      - stepId: create
+        operationId: create-vpc
+        requestBody:
+          contentType: application/json
+          payload:
+            name: $inputs.name
+            description: $inputs.description
+            labels: $inputs.labels
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: created
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.create.outputs.job
+      - stepId: show
+        workflowId: vpc-show
+        parameters:
+          - name: vpc
+            value: $steps.created.outputs.reference
+    outputs:
+      vpc: $steps.show.outputs.vpc
+
+  - workflowId: vpc-update
+    x-ezu-command: vpc update
+    summary: Rename a VPC or change its description or labels.
+    x-ezu-args: [vpc]
+    inputs:
+      type: object
+      required: [vpc]
+      properties:
+        vpc:
+          type: string
+          description: VPC name or id
+        name:
+          type: string
+          description: New name
+        description:
+          type: string
+          description: Description
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+          description: Labels, as labels.KEY=VALUE; they replace the current ones
+    steps:
+      - stepId: find
+        workflowId: vpc-id
+        parameters:
+          - name: vpc
+            value: $inputs.vpc
+      - stepId: update
+        operationId: update-vpc
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            name: $inputs.name
+            description: $inputs.description
+            labels: $inputs.labels
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          vpc: $response.body
+    outputs:
+      vpc: $steps.update.outputs.vpc
+
+  - workflowId: vpc-delete
+    x-ezu-command: vpc delete
+    summary: Delete a VPC.
+    x-ezu-args: [vpc]
+    inputs:
+      type: object
+      required: [vpc]
+      properties:
+        vpc:
+          type: string
+          description: VPC name or id
+    steps:
+      - stepId: find
+        workflowId: vpc-id
+        parameters:
+          - name: vpc
+            value: $inputs.vpc
+      - stepId: delete
+        operationId: delete-vpc
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+    outputs:
+      deleted: $steps.find.outputs.id
+
+  # ---- subnets ----
+
+  - workflowId: vpc-subnet-list
+    x-ezu-command: vpc subnet list
+    summary: List the subnets of a VPC.
+    x-ezu-args: [vpc]
+    inputs:
+      type: object
+      required: [vpc]
+      properties:
+        vpc:
+          type: string
+          description: VPC name or id
+    steps:
+      - stepId: find
+        workflowId: vpc-id
+        parameters:
+          - name: vpc
+            value: $inputs.vpc
+      - stepId: list
+        operationId: list-subnets
+        parameters:
+          - name: vpc-id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          subnets: $response.body#/subnets
+    outputs:
+      subnets: $steps.list.outputs.subnets
+
+  - workflowId: vpc-subnet-show
+    x-ezu-command: vpc subnet show
+    summary: Show a subnet of a VPC, with the instances attached to it.
+    x-ezu-args: [vpc, subnet]
+    inputs:
+      type: object
+      required: [vpc, subnet]
+      properties:
+        vpc:
+          type: string
+          description: VPC name or id
+        subnet:
+          type: string
+          description: Subnet name or id
+    steps:
+      - stepId: find-vpc
+        workflowId: vpc-id
+        parameters:
+          - name: vpc
+            value: $inputs.vpc
+      - stepId: find
+        workflowId: subnet-id
+        parameters:
+          - name: vpc-id
+            value: $steps.find-vpc.outputs.id
+          - name: subnet
+            value: $inputs.subnet
+      - stepId: show
+        operationId: get-subnet
+        parameters:
+          - name: vpc-id
+            in: path
+            value: $steps.find-vpc.outputs.id
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          subnet: $response.body
+    outputs:
+      subnet: $steps.show.outputs.subnet
+
+  - workflowId: vpc-subnet-create
+    x-ezu-command: vpc subnet create
+    summary: Create a subnet in a VPC, wait until it exists, and show it.
+    x-ezu-args: [vpc, name]
+    inputs:
+      type: object
+      required: [vpc, name]
+      properties:
+        vpc:
+          type: string
+          description: VPC name or id
+        name:
+          type: string
+          description: Subnet name
+        ipv4-block:
+          type: string
+          description: IPv4 block of the subnet (CIDR, e.g. 10.0.0.0/24)
+        address-family:
+          type: string
+          enum: [inet4]
+          description: Address family
+          default: inet4
+        address-space:
+          type: string
+          enum: [private]
+          description: Address space
+          default: private
+        description:
+          type: string
+          description: Description
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+          description: Labels, as labels.KEY=VALUE
+    steps:
+      - stepId: find
+        workflowId: vpc-id
+        parameters:
+          - name: vpc
+            value: $inputs.vpc
+      - stepId: create
+        operationId: create-subnet
+        parameters:
+          - name: vpc-id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            name: $inputs.name
+            ipv4-block: $inputs.ipv4-block
+            addressfamily: $inputs.address-family
+            address-space: $inputs.address-space
+            description: $inputs.description
+            labels: $inputs.labels
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: created
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.create.outputs.job
+      - stepId: show
+        workflowId: vpc-subnet-show
+        parameters:
+          - name: vpc
+            value: $steps.find.outputs.id
+          - name: subnet
+            value: $steps.created.outputs.reference
+    outputs:
+      subnet: $steps.show.outputs.subnet
+
+  - workflowId: vpc-subnet-update
+    x-ezu-command: vpc subnet update
+    summary: Rename a subnet or change its description, labels or IPv4 block.
+    x-ezu-args: [vpc, subnet]
+    inputs:
+      type: object
+      required: [vpc, subnet]
+      properties:
+        vpc:
+          type: string
+          description: VPC name or id
+        subnet:
+          type: string
+          description: Subnet name or id
+        name:
+          type: string
+          description: New name
+        description:
+          type: string
+          description: Description
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+          description: Labels, as labels.KEY=VALUE; they replace the current ones
+        ipv4-block:
+          type: string
+          description: IPv4 block of the subnet (CIDR)
+    steps:
+      - stepId: find-vpc
+        workflowId: vpc-id
+        parameters:
+          - name: vpc
+            value: $inputs.vpc
+      - stepId: find
+        workflowId: subnet-id
+        parameters:
+          - name: vpc-id
+            value: $steps.find-vpc.outputs.id
+          - name: subnet
+            value: $inputs.subnet
+      - stepId: update
+        operationId: update-subnet
+        parameters:
+          - name: vpc-id
+            in: path
+            value: $steps.find-vpc.outputs.id
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            name: $inputs.name
+            description: $inputs.description
+            labels: $inputs.labels
+            ipv4-block: $inputs.ipv4-block
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          subnet: $response.body
+    outputs:
+      subnet: $steps.update.outputs.subnet
+
+  - workflowId: vpc-subnet-delete
+    x-ezu-command: vpc subnet delete
+    summary: Delete a subnet of a VPC.
+    x-ezu-args: [vpc, subnet]
+    inputs:
+      type: object
+      required: [vpc, subnet]
+      properties:
+        vpc:
+          type: string
+          description: VPC name or id
+        subnet:
+          type: string
+          description: Subnet name or id
+    steps:
+      - stepId: find-vpc
+        workflowId: vpc-id
+        parameters:
+          - name: vpc
+            value: $inputs.vpc
+      - stepId: find
+        workflowId: subnet-id
+        parameters:
+          - name: vpc-id
+            value: $steps.find-vpc.outputs.id
+          - name: subnet
+            value: $inputs.subnet
+      - stepId: delete
+        operationId: delete-subnet
+        parameters:
+          - name: vpc-id
+            in: path
+            value: $steps.find-vpc.outputs.id
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+    outputs:
+      deleted: $steps.find.outputs.id
+
+  - workflowId: vpc-subnet-attach
+    x-ezu-command: vpc subnet attach
+    summary: Attach an instance to a subnet, and show the subnet.
+    x-ezu-args: [vpc, subnet, instance]
+    inputs:
+      type: object
+      required: [vpc, subnet, instance]
+      properties:
+        vpc:
+          type: string
+          description: VPC name or id
+        subnet:
+          type: string
+          description: Subnet name or id
+        instance:
+          type: string
+          description: Instance name or id
+        ipv4:
+          type: string
+          description: IPv4 address of the instance in the subnet; one is chosen by default
+    steps:
+      - stepId: find-vpc
+        workflowId: vpc-id
+        parameters:
+          - name: vpc
+            value: $inputs.vpc
+      - stepId: find
+        workflowId: subnet-id
+        parameters:
+          - name: vpc-id
+            value: $steps.find-vpc.outputs.id
+          - name: subnet
+            value: $inputs.subnet
+      - stepId: instance
+        workflowId: $sourceDescriptions.common.instance-id
+        parameters:
+          - name: instance
+            value: $inputs.instance
+      - stepId: attach
+        operationId: attach-instance-to-subnet
+        parameters:
+          - name: vpc-id
+            in: path
+            value: $steps.find-vpc.outputs.id
+          - name: subnet-id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            instance:
+              id: $steps.instance.outputs.id
+            ipv4: $inputs.ipv4
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.attach.outputs.job
+      - stepId: show
+        workflowId: vpc-subnet-show
+        parameters:
+          - name: vpc
+            value: $steps.find-vpc.outputs.id
+          - name: subnet
+            value: $steps.find.outputs.id
+    outputs:
+      subnet: $steps.show.outputs.subnet
+
+  - workflowId: vpc-subnet-detach
+    x-ezu-command: vpc subnet detach
+    summary: Detach an instance from a subnet, and show the subnet.
+    x-ezu-args: [vpc, subnet, instance]
+    inputs:
+      type: object
+      required: [vpc, subnet, instance]
+      properties:
+        vpc:
+          type: string
+          description: VPC name or id
+        subnet:
+          type: string
+          description: Subnet name or id
+        instance:
+          type: string
+          description: Instance name or id
+    steps:
+      - stepId: find-vpc
+        workflowId: vpc-id
+        parameters:
+          - name: vpc
+            value: $inputs.vpc
+      - stepId: find
+        workflowId: subnet-id
+        parameters:
+          - name: vpc-id
+            value: $steps.find-vpc.outputs.id
+          - name: subnet
+            value: $inputs.subnet
+      - stepId: instance
+        workflowId: $sourceDescriptions.common.instance-id
+        parameters:
+          - name: instance
+            value: $inputs.instance
+      - stepId: detach
+        operationId: detach-instance-from-subnet
+        parameters:
+          - name: vpc-id
+            in: path
+            value: $steps.find-vpc.outputs.id
+          - name: subnet-id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            instance:
+              id: $steps.instance.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.detach.outputs.job
+      - stepId: show
+        workflowId: vpc-subnet-show
+        parameters:
+          - name: vpc
+            value: $steps.find-vpc.outputs.id
+          - name: subnet
+            value: $steps.find.outputs.id
+    outputs:
+      subnet: $steps.show.outputs.subnet
+
+  # ---- routes ----
+
+  - workflowId: vpc-route-list
+    x-ezu-command: vpc route list
+    summary: List the routes of a VPC, or of one of its subnets.
+    x-ezu-args: [vpc]
+    inputs:
+      type: object
+      required: [vpc]
+      properties:
+        vpc:
+          type: string
+          description: VPC name or id
+        subnet:
+          type: string
+          description: Name or id of a subnet, to list its routes only
+    steps:
+      - stepId: find
+        workflowId: vpc-id
+        parameters:
+          - name: vpc
+            value: $inputs.vpc
+        onSuccess:
+          - name: no-subnet
+            type: goto
+            stepId: list
+            criteria:
+              - condition: $inputs.subnet == null
+      - stepId: find-subnet
+        workflowId: subnet-id
+        parameters:
+          - name: vpc-id
+            value: $steps.find.outputs.id
+          - name: subnet
+            value: $inputs.subnet
+      - stepId: list-subnet
+        operationId: list-routes
+        parameters:
+          - name: vpc-id
+            in: path
+            value: $steps.find.outputs.id
+          - name: subnet-id
+            in: path
+            value: $steps.find-subnet.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        onSuccess:
+          - name: listed
+            type: end
+        outputs:
+          routes: $response.body#/routes
+      - stepId: list
+        operationId: list-vpc-routes
+        parameters:
+          - name: vpc-id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          routes: $response.body#/routes
+    outputs:
+      routes: $steps.list.outputs.routes
+      subnet-routes: $steps.list-subnet.outputs.routes
+
+  - workflowId: vpc-route-create
+    x-ezu-command: vpc route create
+    summary: Create a route in a subnet of a VPC.
+    x-ezu-args: [vpc]
+    inputs:
+      type: object
+      required: [vpc, subnet, destination, target]
+      properties:
+        vpc:
+          type: string
+          description: VPC name or id
+        subnet:
+          type: string
+          description: Name or id of the subnet to create the route in
+        destination:
+          type: string
+          description: Destination (CIDR, e.g. 10.9.0.0/24)
+        target:
+          type: string
+          description: Target, as ip=ADDRESS (e.g. ip=10.0.0.5)
+        description:
+          type: string
+          description: Description
+    steps:
+      - stepId: find-vpc
+        workflowId: vpc-id
+        parameters:
+          - name: vpc
+            value: $inputs.vpc
+      - stepId: find
+        workflowId: subnet-id
+        parameters:
+          - name: vpc-id
+            value: $steps.find-vpc.outputs.id
+          - name: subnet
+            value: $inputs.subnet
+      - stepId: create
+        operationId: create-route
+        parameters:
+          - name: vpc-id
+            in: path
+            value: $steps.find-vpc.outputs.id
+          - name: subnet-id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            destination: $inputs.destination
+            target: $inputs.target
+            description: $inputs.description
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          route: $response.body
+    outputs:
+      route: $steps.create.outputs.route
+
+  - workflowId: vpc-route-delete
+    x-ezu-command: vpc route delete
+    summary: Delete a route of a subnet of a VPC.
+    x-ezu-args: [vpc, route]
+    inputs:
+      type: object
+      required: [vpc, route, subnet]
+      properties:
+        vpc:
+          type: string
+          description: VPC name or id
+        route:
+          type: string
+          description: Route id, as `vpc route list` lists them
+        subnet:
+          type: string
+          description: Name or id of the subnet the route belongs to
+    steps:
+      - stepId: find-vpc
+        workflowId: vpc-id
+        parameters:
+          - name: vpc
+            value: $inputs.vpc
+      - stepId: find
+        workflowId: subnet-id
+        parameters:
+          - name: vpc-id
+            value: $steps.find-vpc.outputs.id
+          - name: subnet
+            value: $inputs.subnet
+      - stepId: delete
+        operationId: delete-route
+        parameters:
+          - name: vpc-id
+            in: path
+            value: $steps.find-vpc.outputs.id
+          - name: subnet-id
+            in: path
+            value: $steps.find.outputs.id
+          - name: id
+            in: path
+            value: $inputs.route
+        successCriteria:
+          - condition: $statusCode == 200
+    outputs:
+      deleted: $inputs.route

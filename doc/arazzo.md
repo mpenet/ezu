@@ -159,13 +159,15 @@ $ exo compute instance snapshot create web1
 
 A command line's words go down the tree until they reach a workflow; the arguments after it are its inputs (`name=value`) and positional values. A group lists what is under it, a word that names nothing stops with a suggestion (`no command 'instanse' in exo compute; did you mean instance?`), and `--help` after a workflow's words describes it. Completion offers the words, then the workflow's inputs. Workflows without words (shared steps, say) stay out of the listings, and their id still runs them, as in a document without any words: `exo zone-list`. Mounted documents are loaded as [Arazzo sources](#workflows-of-other-documents) are, next to the document unless sources are trusted. `--check` checks the words (a command given twice, or both a command and a group of commands) and the mounted documents.
 
-[`examples/exoscale.arazzo.yaml`](examples/exoscale.arazzo.yaml) makes Exoscale's `exo` command line such a command, with [command words](#command-words). It mounts [`exoscale-compute.arazzo.yaml`](examples/exoscale-compute.arazzo.yaml) as `exo compute`: instances and their snapshots, instance types, templates, SSH keys, security groups and their rules, elastic IPs, private networks, anti-affinity groups, deploy targets and block storage. Its workflows take resources by name or id, wait for each job to finish and show the result; the steps they share (finding an id by name, waiting for a job) are workflows of [`exoscale-common.arazzo.yaml`](examples/exoscale-common.arazzo.yaml).
+[`examples/exoscale.arazzo.yaml`](examples/exoscale.arazzo.yaml) makes Exoscale's `exo` command line such a command, with [command words](#command-words): about 400 workflows over 360 of the API's operations, in documents it mounts as `exo compute` (instances, pools, load balancers, security groups, elastic IPs, private networks, block storage, templates, and `exo compute sks` for Kubernetes), `exo dbaas`, `exo dns`, `exo iam`, `exo kms`, `exo ai` and `exo networking` (VPCs). Its workflows take resources by name or id, wait for each job to finish and show the result; the steps they share (finding an id by name, waiting for a job) are workflows of [`exoscale-common.arazzo.yaml`](examples/exoscale-common.arazzo.yaml).
 
 ```sh
 exo compute instance create web1 size=large ssh-key=me labels.env=prod
 exo compute security-group rule add web port=443
+exo compute sks nodepool add k8s workers size=3
+exo dbaas create pg db1 hobbyist-2
+exo dns add example.com A name=www content=192.0.2.1
 exo compute instance stop web1 --server.zone=de-fra-1
-exo zone list
 ```
 
 ## Checking a document

@@ -1,0 +1,617 @@
+# Exoscale's `exo kms` commands as Arazzo workflows, mounted by
+# exoscale.arazzo.yaml: KMS keys, named by name or id, and the cryptographic
+# operations made with them. KMS calls are synchronous: nothing waits.
+arazzo: 1.1.0
+info:
+  title: Exoscale KMS
+  summary: KMS keys, their rotation and deletion, encryption and decryption…
+  version: 1.0.0
+sourceDescriptions:
+  - name: exoscale
+    url: https://openapi-v2.exoscale.com/source.json
+    type: openapi
+workflows:
+  - workflowId: key-id
+    summary: The id of a KMS key, given its name or id.
+    x-ezu-args: [key]
+    inputs:
+      type: object
+      required: [key]
+      properties:
+        key:
+          type: string
+          description: KMS key name or id
+    steps:
+      - stepId: find
+        operationId: list-kms-keys
+        successCriteria:
+          - condition: $statusCode == 200
+          - context: $response.body
+            type: jsonpath
+            condition: "$['kms-keys'][?@.name == '{$inputs.key}' || @.id == '{$inputs.key}']"
+        outputs:
+          id:
+            context: $response.body
+            type: jsonpath
+            selector: "$['kms-keys'][?@.name == '{$inputs.key}' || @.id == '{$inputs.key}'].id"
+    outputs:
+      id: $steps.find.outputs.id
+
+  # ---- keys ----
+
+  - workflowId: key-list
+    x-ezu-command: key list
+    summary: List the KMS keys of the zone.
+    steps:
+      - stepId: list
+        operationId: list-kms-keys
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          kms-keys: $response.body#/kms-keys
+    outputs:
+      kms-keys: $steps.list.outputs.kms-keys
+
+  - workflowId: key-show
+    x-ezu-command: key show
+    summary: Show a KMS key.
+    x-ezu-args: [key]
+    inputs:
+      type: object
+      required: [key]
+      properties:
+        key:
+          type: string
+          description: KMS key name or id
+    steps:
+      - stepId: find
+        workflowId: key-id
+        parameters:
+          - name: key
+            value: $inputs.key
+      - stepId: show
+        operationId: get-kms-key
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          kms-key: $response.body
+    outputs:
+      kms-key: $steps.show.outputs.kms-key
+
+  - workflowId: key-create
+    x-ezu-command: key create
+    summary: Create a KMS key.
+    x-ezu-args: [name]
+    inputs:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          description: Key name
+        description:
+          type: string
+          description: Key description
+        usage:
+          type: string
+          enum: [encrypt-decrypt]
+          description: Key usage
+          default: encrypt-decrypt
+        multizone:
+          type: boolean
+          description: Allow replicating the key to other zones
+          default: false
+    steps:
+      - stepId: create
+        operationId: create-kms-key
+        requestBody:
+          contentType: application/json
+          payload:
+            name: $inputs.name
+            description: $inputs.description
+            usage: $inputs.usage
+            multi-zone: $inputs.multizone
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          kms-key: $response.body
+    outputs:
+      kms-key: $steps.create.outputs.kms-key
+
+  - workflowId: key-enable
+    x-ezu-command: key enable
+    summary: Enable a KMS key, and show it.
+    x-ezu-args: [key]
+    inputs:
+      type: object
+      required: [key]
+      properties:
+        key:
+          type: string
+          description: KMS key name or id
+    steps:
+      - stepId: find
+        workflowId: key-id
+        parameters:
+          - name: key
+            value: $inputs.key
+      - stepId: enable
+        operationId: enable-kms-key
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+      - stepId: show
+        workflowId: key-show
+        parameters:
+          - name: key
+            value: $steps.find.outputs.id
+    outputs:
+      kms-key: $steps.show.outputs.kms-key
+
+  - workflowId: key-disable
+    x-ezu-command: key disable
+    summary: Disable a KMS key, and show it.
+    x-ezu-args: [key]
+    inputs:
+      type: object
+      required: [key]
+      properties:
+        key:
+          type: string
+          description: KMS key name or id
+    steps:
+      - stepId: find
+        workflowId: key-id
+        parameters:
+          - name: key
+            value: $inputs.key
+      - stepId: disable
+        operationId: disable-kms-key
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+      - stepId: show
+        workflowId: key-show
+        parameters:
+          - name: key
+            value: $steps.find.outputs.id
+    outputs:
+      kms-key: $steps.show.outputs.kms-key
+
+  - workflowId: key-replicate
+    x-ezu-command: key replicate
+    summary: Replicate a multi-zone KMS key to another zone, and show it.
+    x-ezu-args: [key, target-zone]
+    inputs:
+      type: object
+      required: [key, target-zone]
+      properties:
+        key:
+          type: string
+          description: KMS key name or id
+        target-zone:
+          type: string
+          description: Zone to replicate the key to
+    steps:
+      - stepId: find
+        workflowId: key-id
+        parameters:
+          - name: key
+            value: $inputs.key
+      - stepId: replicate
+        operationId: replicate-kms-key
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            zone: $inputs.target-zone
+        successCriteria:
+          - condition: $statusCode == 200
+      - stepId: show
+        workflowId: key-show
+        parameters:
+          - name: key
+            value: $steps.find.outputs.id
+    outputs:
+      kms-key: $steps.show.outputs.kms-key
+
+  - workflowId: key-rotate
+    x-ezu-command: key rotate
+    summary: Rotate a symmetric KMS key's material now.
+    x-ezu-args: [key]
+    inputs:
+      type: object
+      required: [key]
+      properties:
+        key:
+          type: string
+          description: KMS key name or id
+    steps:
+      - stepId: find
+        workflowId: key-id
+        parameters:
+          - name: key
+            value: $inputs.key
+      - stepId: rotate
+        operationId: rotate-kms-key
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          rotation: $response.body#/rotation
+    outputs:
+      rotation: $steps.rotate.outputs.rotation
+
+  - workflowId: key-enable-rotation
+    x-ezu-command: key enable-rotation
+    summary: Rotate a KMS key's material periodically.
+    x-ezu-args: [key]
+    inputs:
+      type: object
+      required: [key]
+      properties:
+        key:
+          type: string
+          description: KMS key name or id
+        rotation-period:
+          type: integer
+          description: Days between rotations (90 to 2560)
+          default: 365
+    steps:
+      - stepId: find
+        workflowId: key-id
+        parameters:
+          - name: key
+            value: $inputs.key
+      - stepId: enable
+        operationId: enable-kms-key-rotation
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            rotation-period: $inputs.rotation-period
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          rotation: $response.body#/rotation
+    outputs:
+      rotation: $steps.enable.outputs.rotation
+
+  - workflowId: key-disable-rotation
+    x-ezu-command: key disable-rotation
+    summary: Stop rotating a KMS key's material periodically.
+    x-ezu-args: [key]
+    inputs:
+      type: object
+      required: [key]
+      properties:
+        key:
+          type: string
+          description: KMS key name or id
+    steps:
+      - stepId: find
+        workflowId: key-id
+        parameters:
+          - name: key
+            value: $inputs.key
+      - stepId: disable
+        operationId: disable-kms-key-rotation
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          rotation: $response.body#/rotation
+    outputs:
+      rotation: $steps.disable.outputs.rotation
+
+  - workflowId: key-list-rotation
+    x-ezu-command: key list-rotation
+    summary: List the material versions of a KMS key.
+    x-ezu-args: [key]
+    inputs:
+      type: object
+      required: [key]
+      properties:
+        key:
+          type: string
+          description: KMS key name or id
+    steps:
+      - stepId: find
+        workflowId: key-id
+        parameters:
+          - name: key
+            value: $inputs.key
+      - stepId: list
+        operationId: list-kms-key-rotations
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          rotations: $response.body#/rotations
+    outputs:
+      rotations: $steps.list.outputs.rotations
+
+  - workflowId: key-schedule-deletion
+    x-ezu-command: key schedule-deletion
+    summary: Schedule a KMS key's deletion after a delay, and show when it happens.
+    x-ezu-args: [key]
+    inputs:
+      type: object
+      required: [key]
+      properties:
+        key:
+          type: string
+          description: KMS key name or id
+        delay-days:
+          type: integer
+          description: Days before the key is deleted (7 to 30)
+          default: 30
+    steps:
+      - stepId: find
+        workflowId: key-id
+        parameters:
+          - name: key
+            value: $inputs.key
+      - stepId: schedule
+        operationId: schedule-kms-key-deletion
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            delay-days: $inputs.delay-days
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          delete-at: $response.body#/delete-at
+    outputs:
+      delete-at: $steps.schedule.outputs.delete-at
+
+  - workflowId: key-cancel-deletion
+    x-ezu-command: key cancel-deletion
+    summary: Cancel a KMS key's scheduled deletion, and show it.
+    x-ezu-args: [key]
+    inputs:
+      type: object
+      required: [key]
+      properties:
+        key:
+          type: string
+          description: KMS key name or id
+    steps:
+      - stepId: find
+        workflowId: key-id
+        parameters:
+          - name: key
+            value: $inputs.key
+      - stepId: cancel
+        operationId: cancel-kms-key-deletion
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+      - stepId: show
+        workflowId: key-show
+        parameters:
+          - name: key
+            value: $steps.find.outputs.id
+    outputs:
+      kms-key: $steps.show.outputs.kms-key
+
+  # ---- cryptographic operations ----
+
+  - workflowId: crypto-encrypt
+    x-ezu-command: crypto encrypt
+    summary: Encrypt base64-encoded data with a KMS key.
+    x-ezu-args: [key, plaintext]
+    inputs:
+      type: object
+      required: [key, plaintext]
+      properties:
+        key:
+          type: string
+          description: KMS key name or id
+        plaintext:
+          type: string
+          description: Data to encrypt, base64-encoded
+        encryption-context:
+          type: string
+          description: Additional authenticated data, base64-encoded; decrypting needs it too
+    steps:
+      - stepId: find
+        workflowId: key-id
+        parameters:
+          - name: key
+            value: $inputs.key
+      - stepId: encrypt
+        operationId: encrypt
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            plaintext: $inputs.plaintext
+            encryption-context: $inputs.encryption-context
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          ciphertext: $response.body#/ciphertext
+    outputs:
+      ciphertext: $steps.encrypt.outputs.ciphertext
+
+  - workflowId: crypto-decrypt
+    x-ezu-command: crypto decrypt
+    summary: Decrypt a ciphertext made with a KMS key; the plaintext is base64-encoded.
+    x-ezu-args: [key, ciphertext]
+    inputs:
+      type: object
+      required: [key, ciphertext]
+      properties:
+        key:
+          type: string
+          description: KMS key name or id
+        ciphertext:
+          type: string
+          description: Ciphertext, base64-encoded
+        encryption-context:
+          type: string
+          description: Additional authenticated data given when encrypting, base64-encoded
+    steps:
+      - stepId: find
+        workflowId: key-id
+        parameters:
+          - name: key
+            value: $inputs.key
+      - stepId: decrypt
+        operationId: decrypt
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            ciphertext: $inputs.ciphertext
+            encryption-context: $inputs.encryption-context
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          plaintext: $response.body#/plaintext
+    outputs:
+      plaintext: $steps.decrypt.outputs.plaintext
+
+  - workflowId: crypto-generate-data-key
+    x-ezu-command: crypto generate-data-key
+    summary: Generate a data encryption key, in clear and encrypted with a KMS key.
+    x-ezu-args: [key]
+    inputs:
+      type: object
+      required: [key]
+      properties:
+        key:
+          type: string
+          description: KMS key name or id
+        key-spec:
+          type: string
+          enum: [AES-256]
+          description: Kind of data key
+        bytes-count:
+          type: integer
+          description: Length of the data key in bytes (1 to 1024)
+        encryption-context:
+          type: string
+          description: Additional authenticated data, base64-encoded
+    steps:
+      - stepId: find
+        workflowId: key-id
+        parameters:
+          - name: key
+            value: $inputs.key
+      - stepId: generate
+        operationId: generate-data-key
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            key-spec: $inputs.key-spec
+            bytes-count: $inputs.bytes-count
+            encryption-context: $inputs.encryption-context
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          plaintext: $response.body#/plaintext
+          ciphertext: $response.body#/ciphertext
+    outputs:
+      plaintext: $steps.generate.outputs.plaintext
+      ciphertext: $steps.generate.outputs.ciphertext
+
+  - workflowId: crypto-reencrypt
+    x-ezu-command: crypto reencrypt
+    summary: Decrypt a ciphertext and encrypt it again, with a key's newest material or another key.
+    x-ezu-args: [key, destination-key, ciphertext]
+    inputs:
+      type: object
+      required: [key, destination-key, ciphertext]
+      properties:
+        key:
+          type: string
+          description: Name or id of the KMS key the ciphertext was made with
+        destination-key:
+          type: string
+          description: Name or id of the KMS key to encrypt with (the same one for its newest material)
+        ciphertext:
+          type: string
+          description: Ciphertext, base64-encoded
+        source-encryption-context:
+          type: string
+          description: Additional authenticated data the ciphertext was made with, base64-encoded
+        dest-encryption-context:
+          type: string
+          description: Additional authenticated data for the new ciphertext, base64-encoded
+    steps:
+      - stepId: find
+        workflowId: key-id
+        parameters:
+          - name: key
+            value: $inputs.key
+      - stepId: destination
+        workflowId: key-id
+        parameters:
+          - name: key
+            value: $inputs.destination-key
+      - stepId: reencrypt
+        operationId: re-encrypt
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            source:
+              key: $steps.find.outputs.id
+              ciphertext: $inputs.ciphertext
+              encryption-context: $inputs.source-encryption-context
+            destination:
+              key: $steps.destination.outputs.id
+              encryption-context: $inputs.dest-encryption-context
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          ciphertext: $response.body#/ciphertext
+    outputs:
+      ciphertext: $steps.reencrypt.outputs.ciphertext

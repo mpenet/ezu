@@ -1,0 +1,810 @@
+# Exoscale's `exo dedicated-inference` (alias `exo ai`) commands as Arazzo
+# workflows, mounted by exoscale.arazzo.yaml: models, their deployments on
+# GPUs and the API keys that reach them. Deployments, models and API keys are
+# named by name or id; changes made by a job wait for it and show the result.
+arazzo: 1.1.0
+info:
+  title: Exoscale dedicated inference
+  summary: AI models, deployments on GPUs, AI API keys…
+  version: 1.0.0
+sourceDescriptions:
+  - name: exoscale
+    url: https://openapi-v2.exoscale.com/source.json
+    type: openapi
+  # waiting for jobs
+  - name: common
+    url: exoscale-common.arazzo.yaml
+    type: arazzo
+workflows:
+  - workflowId: model-id
+    summary: The id of an AI model, given its name or id.
+    x-ezu-args: [model]
+    inputs:
+      type: object
+      required: [model]
+      properties:
+        model:
+          type: string
+          description: Model name or id
+    steps:
+      - stepId: find
+        operationId: list-models
+        successCriteria:
+          - condition: $statusCode == 200
+          - context: $response.body
+            type: jsonpath
+            condition: "$.models[?@.name == '{$inputs.model}' || @.id == '{$inputs.model}']"
+        outputs:
+          id:
+            context: $response.body
+            type: jsonpath
+            selector: "$.models[?@.name == '{$inputs.model}' || @.id == '{$inputs.model}'].id"
+    outputs:
+      id: $steps.find.outputs.id
+
+  - workflowId: deployment-id
+    summary: The id of an AI deployment, given its name or id.
+    x-ezu-args: [deployment]
+    inputs:
+      type: object
+      required: [deployment]
+      properties:
+        deployment:
+          type: string
+          description: Deployment name or id
+    steps:
+      - stepId: find
+        operationId: list-deployments
+        successCriteria:
+          - condition: $statusCode == 200
+          - context: $response.body
+            type: jsonpath
+            condition: "$.deployments[?@.name == '{$inputs.deployment}' || @.id == '{$inputs.deployment}']"
+        outputs:
+          id:
+            context: $response.body
+            type: jsonpath
+            selector: "$.deployments[?@.name == '{$inputs.deployment}' || @.id == '{$inputs.deployment}'].id"
+    outputs:
+      id: $steps.find.outputs.id
+
+  - workflowId: api-key-id
+    summary: The id of an AI API key, given its name or id.
+    x-ezu-args: [api-key]
+    inputs:
+      type: object
+      required: [api-key]
+      properties:
+        api-key:
+          type: string
+          description: AI API key name or id
+    steps:
+      - stepId: find
+        operationId: list-ai-api-keys
+        successCriteria:
+          - condition: $statusCode == 200
+          - context: $response.body
+            type: jsonpath
+            condition: "$['ai-api-keys'][?@.name == '{$inputs.api-key}' || @.id == '{$inputs.api-key}']"
+        outputs:
+          id:
+            context: $response.body
+            type: jsonpath
+            selector: "$['ai-api-keys'][?@.name == '{$inputs.api-key}' || @.id == '{$inputs.api-key}'].id"
+    outputs:
+      id: $steps.find.outputs.id
+
+  # ---- models ----
+
+  - workflowId: model-list
+    x-ezu-command: model list
+    summary: List the AI models.
+    steps:
+      - stepId: list
+        operationId: list-models
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          models: $response.body#/models
+    outputs:
+      models: $steps.list.outputs.models
+
+  - workflowId: model-show
+    x-ezu-command: model show
+    summary: Show an AI model.
+    x-ezu-args: [model]
+    inputs:
+      type: object
+      required: [model]
+      properties:
+        model:
+          type: string
+          description: Model name or id
+    steps:
+      - stepId: find
+        workflowId: model-id
+        parameters:
+          - name: model
+            value: $inputs.model
+      - stepId: show
+        operationId: get-model
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          model: $response.body
+    outputs:
+      model: $steps.show.outputs.model
+
+  - workflowId: model-create
+    x-ezu-command: model create
+    summary: Download a model from Hugging Face, wait until it is done, and show it.
+    x-ezu-args: [name]
+    inputs:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          description: Hugging Face model name (swiss-ai/Apertus-8B-Instruct-2509, say)
+        huggingface-token:
+          type: string
+          description: Hugging Face token, for models that need one
+    steps:
+      - stepId: create
+        operationId: create-model
+        requestBody:
+          contentType: application/json
+          payload:
+            name: $inputs.name
+            huggingface-token: $inputs.huggingface-token
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: created
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.create.outputs.job
+      - stepId: show
+        workflowId: model-show
+        parameters:
+          - name: model
+            value: $steps.created.outputs.reference
+    outputs:
+      model: $steps.show.outputs.model
+
+  - workflowId: model-delete
+    x-ezu-command: model delete
+    summary: Delete an AI model and wait until it is gone.
+    x-ezu-args: [model]
+    inputs:
+      type: object
+      required: [model]
+      properties:
+        model:
+          type: string
+          description: Model name or id
+    steps:
+      - stepId: find
+        workflowId: model-id
+        parameters:
+          - name: model
+            value: $inputs.model
+      - stepId: delete
+        operationId: delete-model
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.delete.outputs.job
+    outputs:
+      deleted: $steps.find.outputs.id
+
+  # ---- deployments ----
+
+  - workflowId: deployment-list
+    x-ezu-command: deployment list
+    summary: List the AI deployments.
+    inputs:
+      type: object
+      properties:
+        visibility:
+          type: string
+          enum: [public, private]
+          description: Only the deployments with this visibility
+    steps:
+      - stepId: list
+        operationId: list-deployments
+        parameters:
+          - name: visibility
+            in: query
+            value: $inputs.visibility
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          deployments: $response.body#/deployments
+    outputs:
+      deployments: $steps.list.outputs.deployments
+
+  - workflowId: deployment-show
+    x-ezu-command: deployment show
+    summary: Show an AI deployment.
+    x-ezu-args: [deployment]
+    inputs:
+      type: object
+      required: [deployment]
+      properties:
+        deployment:
+          type: string
+          description: Deployment name or id
+    steps:
+      - stepId: find
+        workflowId: deployment-id
+        parameters:
+          - name: deployment
+            value: $inputs.deployment
+      - stepId: show
+        operationId: get-deployment
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          deployment: $response.body
+    outputs:
+      deployment: $steps.show.outputs.deployment
+
+  - workflowId: deployment-create
+    x-ezu-command: deployment create
+    summary: Deploy a model on GPUs, wait until the deployment exists, and show it.
+    x-ezu-args: [name]
+    inputs:
+      type: object
+      required: [name, model, gpu-type, gpu-count]
+      properties:
+        name:
+          type: string
+          description: Deployment name
+        model:
+          type: string
+          description: Name or id of the model to deploy
+        gpu-type:
+          type: string
+          description: GPU type family (gpua5000, gpu3080ti…; see deployment instance-type)
+        gpu-count:
+          type: integer
+          description: GPUs per replica (1 to 8)
+        replicas:
+          type: integer
+          description: Number of replicas
+          default: 1
+        inference-engine-params:
+          type: array
+          items:
+            type: string
+          description: Inference engine server arguments, one inference-engine-params=ARG each (see deployment inference-engine-help)
+        inference-engine-version:
+          type: string
+          enum: ['0.12.0', '0.15.1', '0.16.0', '0.17.0', '0.18.0', '0.18.1', '0.19.0', '0.19.1', '0.20.0', '0.20.1', '0.20.2', '0.21.0', '0.22.0', '0.22.1', '0.23.0', '0.24.0', '0.25.0', '0.25.1', '0.26.0']
+          description: Inference engine version
+    steps:
+      - stepId: model
+        workflowId: model-id
+        parameters:
+          - name: model
+            value: $inputs.model
+      - stepId: create
+        operationId: create-deployment
+        requestBody:
+          contentType: application/json
+          payload:
+            name: $inputs.name
+            model:
+              id: $steps.model.outputs.id
+            gpu-type: $inputs.gpu-type
+            gpu-count: $inputs.gpu-count
+            replicas: $inputs.replicas
+            inference-engine-parameters: $inputs.inference-engine-params
+            inference-engine-version: $inputs.inference-engine-version
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: created
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.create.outputs.job
+      - stepId: show
+        workflowId: deployment-show
+        parameters:
+          - name: deployment
+            value: $steps.created.outputs.reference
+    outputs:
+      deployment: $steps.show.outputs.deployment
+
+  - workflowId: deployment-update
+    x-ezu-command: deployment update
+    summary: Rename a deployment or change its inference engine, and show it.
+    x-ezu-args: [deployment]
+    inputs:
+      type: object
+      required: [deployment]
+      properties:
+        deployment:
+          type: string
+          description: Deployment name or id
+        name:
+          type: string
+          description: New name
+        inference-engine-params:
+          type: array
+          items:
+            type: string
+          description: Inference engine server arguments, one inference-engine-params=ARG each; they replace the current ones
+        inference-engine-version:
+          type: string
+          enum: ['0.12.0', '0.15.1', '0.16.0', '0.17.0', '0.18.0', '0.18.1', '0.19.0', '0.19.1', '0.20.0', '0.20.1', '0.20.2', '0.21.0', '0.22.0', '0.22.1', '0.23.0', '0.24.0', '0.25.0', '0.25.1', '0.26.0']
+          description: Inference engine version
+    steps:
+      - stepId: find
+        workflowId: deployment-id
+        parameters:
+          - name: deployment
+            value: $inputs.deployment
+      - stepId: update
+        operationId: update-deployment
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            name: $inputs.name
+            inference-engine-parameters: $inputs.inference-engine-params
+            inference-engine-version: $inputs.inference-engine-version
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.update.outputs.job
+      - stepId: show
+        workflowId: deployment-show
+        parameters:
+          - name: deployment
+            value: $steps.find.outputs.id
+    outputs:
+      deployment: $steps.show.outputs.deployment
+
+  - workflowId: deployment-scale
+    x-ezu-command: deployment scale
+    summary: Change a deployment's number of replicas, and show it.
+    x-ezu-args: [deployment, size]
+    inputs:
+      type: object
+      required: [deployment, size]
+      properties:
+        deployment:
+          type: string
+          description: Deployment name or id
+        size:
+          type: integer
+          description: Number of replicas
+    steps:
+      - stepId: find
+        workflowId: deployment-id
+        parameters:
+          - name: deployment
+            value: $inputs.deployment
+      - stepId: scale
+        operationId: scale-deployment
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            replicas: $inputs.size
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.scale.outputs.job
+      - stepId: show
+        workflowId: deployment-show
+        parameters:
+          - name: deployment
+            value: $steps.find.outputs.id
+    outputs:
+      deployment: $steps.show.outputs.deployment
+
+  - workflowId: deployment-delete
+    x-ezu-command: deployment delete
+    summary: Delete an AI deployment and wait until it is gone.
+    x-ezu-args: [deployment]
+    inputs:
+      type: object
+      required: [deployment]
+      properties:
+        deployment:
+          type: string
+          description: Deployment name or id
+    steps:
+      - stepId: find
+        workflowId: deployment-id
+        parameters:
+          - name: deployment
+            value: $inputs.deployment
+      - stepId: delete
+        operationId: delete-deployment
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.delete.outputs.job
+    outputs:
+      deleted: $steps.find.outputs.id
+
+  - workflowId: deployment-logs
+    x-ezu-command: deployment logs
+    summary: Show the last lines of a deployment's inference engine logs.
+    x-ezu-args: [deployment]
+    inputs:
+      type: object
+      required: [deployment]
+      properties:
+        deployment:
+          type: string
+          description: Deployment name or id
+        tail:
+          type: integer
+          description: Number of lines
+          default: 10
+    steps:
+      - stepId: find
+        workflowId: deployment-id
+        parameters:
+          - name: deployment
+            value: $inputs.deployment
+      - stepId: logs
+        operationId: get-deployment-logs
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+          - name: tail
+            in: query
+            value: $inputs.tail
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          logs: $response.body#/logs
+    outputs:
+      logs: $steps.logs.outputs.logs
+
+  - workflowId: deployment-reveal-api-key
+    x-ezu-command: deployment reveal-api-key
+    summary: Show the API key of a deployment.
+    x-ezu-args: [deployment]
+    inputs:
+      type: object
+      required: [deployment]
+      properties:
+        deployment:
+          type: string
+          description: Deployment name or id
+    steps:
+      - stepId: find
+        workflowId: deployment-id
+        parameters:
+          - name: deployment
+            value: $inputs.deployment
+      - stepId: reveal
+        operationId: reveal-deployment-api-key
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          api-key: $response.body#/api-key
+    outputs:
+      api-key: $steps.reveal.outputs.api-key
+
+  - workflowId: deployment-instance-type
+    x-ezu-command: deployment instance-type
+    summary: List the GPU instance types, and whether the organization may use them.
+    steps:
+      - stepId: list
+        operationId: list-ai-instance-types
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          instance-types: $response.body#/instance-types
+    outputs:
+      instance-types: $steps.list.outputs.instance-types
+
+  - workflowId: deployment-inference-engine-help
+    x-ezu-command: deployment inference-engine-help
+    summary: List the inference engine's parameters, for deployment create and update.
+    x-ezu-args: [version]
+    inputs:
+      type: object
+      properties:
+        version:
+          type: string
+          enum: ['0.12.0', '0.15.1', '0.16.0', '0.17.0', '0.18.0', '0.18.1', '0.19.0', '0.19.1', '0.20.0', '0.20.1', '0.20.2', '0.21.0', '0.22.0', '0.22.1', '0.23.0', '0.24.0', '0.25.0', '0.25.1', '0.26.0']
+          description: Inference engine version; the default one otherwise
+    steps:
+      - stepId: help
+        operationId: get-inference-engine-help
+        parameters:
+          - name: version
+            in: query
+            value: $inputs.version
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          parameters: $response.body#/parameters
+    outputs:
+      parameters: $steps.help.outputs.parameters
+
+  # ---- API keys ----
+
+  - workflowId: api-key-list
+    x-ezu-command: api-key list
+    summary: List the AI API keys.
+    steps:
+      - stepId: list
+        operationId: list-ai-api-keys
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          ai-api-keys: $response.body#/ai-api-keys
+    outputs:
+      ai-api-keys: $steps.list.outputs.ai-api-keys
+
+  - workflowId: api-key-show
+    x-ezu-command: api-key show
+    summary: Show an AI API key, without its value.
+    x-ezu-args: [api-key]
+    inputs:
+      type: object
+      required: [api-key]
+      properties:
+        api-key:
+          type: string
+          description: AI API key name or id
+    steps:
+      - stepId: find
+        workflowId: api-key-id
+        parameters:
+          - name: api-key
+            value: $inputs.api-key
+      - stepId: show
+        operationId: get-ai-api-key
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          ai-api-key: $response.body
+    outputs:
+      ai-api-key: $steps.show.outputs.ai-api-key
+
+  - workflowId: api-key-create
+    x-ezu-command: api-key create
+    summary: Create an AI API key, and show it with its value.
+    x-ezu-args: [name]
+    inputs:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          description: API key name
+        scope:
+          type: string
+          description: What the key reaches, public for all deployments or one deployment's id
+          default: public
+    steps:
+      - stepId: create
+        operationId: create-ai-api-key
+        requestBody:
+          contentType: application/json
+          payload:
+            name: $inputs.name
+            scope: $inputs.scope
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          ai-api-key: $response.body
+    outputs:
+      ai-api-key: $steps.create.outputs.ai-api-key
+
+  - workflowId: api-key-update
+    x-ezu-command: api-key update
+    summary: Rename an AI API key or change its scope.
+    x-ezu-args: [api-key]
+    inputs:
+      type: object
+      required: [api-key]
+      properties:
+        api-key:
+          type: string
+          description: AI API key name or id
+        name:
+          type: string
+          description: New name
+        scope:
+          type: string
+          description: What the key reaches, public for all deployments or one deployment's id
+    steps:
+      - stepId: find
+        workflowId: api-key-id
+        parameters:
+          - name: api-key
+            value: $inputs.api-key
+      - stepId: update
+        operationId: update-ai-api-key
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        requestBody:
+          contentType: application/json
+          payload:
+            name: $inputs.name
+            scope: $inputs.scope
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          ai-api-key: $response.body
+    outputs:
+      ai-api-key: $steps.update.outputs.ai-api-key
+
+  - workflowId: api-key-reveal
+    x-ezu-command: api-key reveal
+    summary: Show the value of an AI API key.
+    x-ezu-args: [api-key]
+    inputs:
+      type: object
+      required: [api-key]
+      properties:
+        api-key:
+          type: string
+          description: AI API key name or id
+    steps:
+      - stepId: find
+        workflowId: api-key-id
+        parameters:
+          - name: api-key
+            value: $inputs.api-key
+      - stepId: reveal
+        operationId: reveal-ai-api-key
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          value: $response.body#/value
+    outputs:
+      value: $steps.reveal.outputs.value
+
+  - workflowId: api-key-rotate
+    x-ezu-command: api-key rotate
+    summary: Give an AI API key a new value, and show it.
+    x-ezu-args: [api-key]
+    inputs:
+      type: object
+      required: [api-key]
+      properties:
+        api-key:
+          type: string
+          description: AI API key name or id
+    steps:
+      - stepId: find
+        workflowId: api-key-id
+        parameters:
+          - name: api-key
+            value: $inputs.api-key
+      - stepId: rotate
+        operationId: rotate-ai-api-key
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          value: $response.body#/value
+    outputs:
+      value: $steps.rotate.outputs.value
+
+  - workflowId: api-key-revoke
+    x-ezu-command: api-key revoke
+    summary: Revoke (delete) an AI API key and wait until it is gone.
+    x-ezu-args: [api-key]
+    inputs:
+      type: object
+      required: [api-key]
+      properties:
+        api-key:
+          type: string
+          description: AI API key name or id
+    steps:
+      - stepId: find
+        workflowId: api-key-id
+        parameters:
+          - name: api-key
+            value: $inputs.api-key
+      - stepId: revoke
+        operationId: delete-ai-api-key
+        parameters:
+          - name: id
+            in: path
+            value: $steps.find.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          job: $response.body#/id
+      - stepId: done
+        workflowId: $sourceDescriptions.common.operation-wait
+        parameters:
+          - name: id
+            value: $steps.revoke.outputs.job
+    outputs:
+      deleted: $steps.find.outputs.id
+
+  # ---- quota ----
+
+  - workflowId: quota-show
+    x-ezu-command: quota show
+    summary: Show the organization's consumption quota, in units per minute (null for unlimited).
+    steps:
+      - stepId: show
+        operationId: get-user-org-consumption-quota
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          quota: $response.body
+    outputs:
+      quota: $steps.show.outputs.quota

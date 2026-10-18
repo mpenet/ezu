@@ -1547,8 +1547,9 @@ does, which a streaming transport hands over one by one."
                       (assert.is_not_nil (io.open (.. target ".bak")))
                       ;; profiles hold credentials
                       (each [_ path (ipairs [target (.. target ".bak")])]
+                        ;; without macOS's @ for extended attributes
                         (let [p (io.popen (.. "ls -l " path))
-                              mode (: (p:read :*a) :match "^(%S+)")]
+                              mode (: (p:read :*a) :match "^([^%s@]+)")]
                           (p:close)
                           (assert.are.equal "-rw-------" mode))))))
               (it "keeps the config's null values when rewriting it"

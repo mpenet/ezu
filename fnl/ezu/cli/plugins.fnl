@@ -38,6 +38,17 @@
                        (.. (dirname current) "/" target)))))
   current)
 
+(fn access-list? [path mode]
+  "Whether path has an access list. ls marks one with + after the mode; on
+macOS, extended attributes take that place (@) and hide it, so the entries
+ls -le lists tell."
+  (or (= (mode:sub 11 11) "+")
+      (and (= (mode:sub 11 11) "@")
+           (not= nil
+                 (: (command-output (.. "ls -lden " (util.shell-quote path)
+                                        " 2>/dev/null"))
+                    :match "\n%s*%d+: ")))))
+
 (fn others-can-change? [mode]
   "Whether a file or directory of mode can be changed by group or others:
 for a directory, unless it is sticky (others can't replace what is yours)."
@@ -62,7 +73,7 @@ credentials. Links are followed."
     (when (others-can-change? mode)
       (fail path (.. "can be changed by other users, who would get your credentials (chmod go-w "
                      file ")")))
-    (when (= (mode:sub 11 11) "+")
+    (when (access-list? file mode)
       (fail path
             "has an access list, which may let other users change it: remove it"))
     ;; nor may anyone else replace it: no directory up to / is theirs to change

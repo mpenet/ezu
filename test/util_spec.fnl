@@ -364,10 +364,12 @@
                                          "'filter' is an object" 1 true)))))))
 
 (fn mode-of [path]
+  "path's mode as ls shows it, without macOS's @ for extended attributes,
+which grant no access; a + for an access list stays."
   (let [p (io.popen (.. "ls -ld " (util.shell-quote path)))
         out (p:read :*a)]
     (p:close)
-    (out:match "^(%S+)")))
+    (out:match "^([^%s@]+)")))
 
 (describe "write-private"
           (fn []

@@ -66,7 +66,7 @@ workflows:
 ezu az vm get-instance 0b6f3c2e
 ```
 
-A positional value shaped like `name=value` (a base64 id ending with `=`) is taken for an assignment; ezu then says to write it `id=…`. A value starting with `-` is written after its name (`offset=-5`), or after `--`, which ends ezu's options. When several sources set the same input, the last one wins: the configured `inputs`, `--inputs`, then the arguments.
+A positional value shaped like `name=value` (a base64 id ending with `=`) is taken for an assignment; ezu then says to write it `id=…`, or after `--`: what follows `--` is values, whatever their shape (`exo kms crypto decrypt vault -- aGVsbG8=`). A value starting with `-` is written after its name (`offset=-5`), or after `--` too, which ends ezu's options. When several sources set the same input, the last one wins: the configured `inputs`, `--inputs`, then the arguments.
 
 Inputs are checked against the `inputs` schema before anything runs (types, required inputs, allowed values…); `--no-validate` runs the workflow anyway. Inputs that aren't given take the schema's `default`.
 

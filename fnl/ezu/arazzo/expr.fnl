@@ -66,48 +66,47 @@ parts = [body] or [header|query|path name...]."
   (let [e (expr:match "^%$(.+)")]
     (when (not e) (error (.. "not a runtime expression: " expr) 0))
     (let [head (or (e:match "^([^#]+)") "")
-                parts (icollect [p (head:gmatch "[^%.]+")] p)
-                rest-from #(icollect [i p (ipairs parts)] (when (>= i $) p))]
-            (match (. parts 1)
-              :inputs
-              (named ctx.inputs parts 2 :input expr)
-              :statusCode
-              (?. ctx :response :status)
-              :url
-              (?. ctx :request :url)
-              :method
-              (?. ctx :request :method)
-              :response
-              (message-value ctx.response (rest-from 2) expr)
-              :request
-              (message-value ctx.request (rest-from 2) expr)
-              :steps
-              (let [step (?. ctx :steps (. parts 2))]
-                (match (. parts 3)
-                  :outputs (named (?. step :outputs) parts 4 :output expr)
-                  :response (message-value (?. step :response) (rest-from 4)
-                                           expr)
-                  :request (message-value (?. step :request) (rest-from 4) expr)
-                  _ (unknown expr)))
-              :workflows
-              (match (. parts 3)
-                :outputs (named (?. ctx :workflows (. parts 2) :outputs) parts
-                                4 :output expr)
-                :inputs (named (?. ctx :workflows (. parts 2) :inputs) parts 4
-                               :input expr)
-                _ (unknown expr))
-              :outputs
-              (named ctx.outputs parts 2 :output expr)
-              :self
-              ctx.self
-              :message
-              (error (.. expr ": AsyncAPI messages are not supported") 0)
-              ;; a sentinel table so the caller can look up the client
-              :sourceDescriptions
-              ;; source names have no dots, operationIds may
-              {:__source (. parts 2) :__operationId (table.concat parts "." 3)}
-              _
-              (unknown expr)))))
+          parts (icollect [p (head:gmatch "[^%.]+")] p)
+          rest-from #(icollect [i p (ipairs parts)] (when (>= i $) p))]
+      (match (. parts 1)
+        :inputs
+        (named ctx.inputs parts 2 :input expr)
+        :statusCode
+        (?. ctx :response :status)
+        :url
+        (?. ctx :request :url)
+        :method
+        (?. ctx :request :method)
+        :response
+        (message-value ctx.response (rest-from 2) expr)
+        :request
+        (message-value ctx.request (rest-from 2) expr)
+        :steps
+        (let [step (?. ctx :steps (. parts 2))]
+          (match (. parts 3)
+            :outputs (named (?. step :outputs) parts 4 :output expr)
+            :response (message-value (?. step :response) (rest-from 4) expr)
+            :request (message-value (?. step :request) (rest-from 4) expr)
+            _ (unknown expr)))
+        :workflows
+        (match (. parts 3)
+          :outputs (named (?. ctx :workflows (. parts 2) :outputs) parts 4
+                          :output expr)
+          :inputs (named (?. ctx :workflows (. parts 2) :inputs) parts 4 :input
+                         expr)
+          _ (unknown expr))
+        :outputs
+        (named ctx.outputs parts 2 :output expr)
+        :self
+        ctx.self
+        :message
+        (error (.. expr ": AsyncAPI messages are not supported") 0)
+        ;; a sentinel table so the caller can look up the client
+        :sourceDescriptions
+        ;; source names have no dots, operationIds may
+        {:__source (. parts 2) :__operationId (table.concat parts "." 3)}
+        _
+        (unknown expr)))))
 
 ;; ---- template substitution ----
 

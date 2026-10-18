@@ -731,8 +731,19 @@ does, which a streaming transport hands over one by one."
                     (with-open [f (io.open file :w)]
                       (f:write (json.encode flow)))
                     (let [routes {"GET https://api.test/pets/7" (respond 200
-                                                                         {:name "Rex"})}
+                                                                         {:name "Rex"})
+                                  "GET https://api.test/pets/aGVsbG8=" (respond 200
+                                                                                {:name "Bas"})
+                                  "GET https://api.test/pets/aGVsbG8%3D" (respond 200
+                                                                                  {:name "Bas"})}
                           ok (ezu-run ["az" file "fetchPet" "7"] routes)
+                          literal (ezu-run ["az"
+                                            file
+                                            "fetchPet"
+                                            "--output=yaml"
+                                            "--"
+                                            "aGVsbG8="]
+                                           routes)
                           extra (ezu-run ["az" file "fetchPet" "7" "8"] routes)
                           lookalike (ezu-run ["az" file "fetchPet" "aGVsbG8="]
                                              routes)
@@ -744,9 +755,12 @@ does, which a streaming transport hands over one by one."
                                                         1 true)
                                         extra.err)
                       (assert.are.equal 1 lookalike.code)
-                      (assert.is_truthy (lookalike.err:find "to pass it as id, write id=aGVsbG8="
+                      (assert.is_truthy (lookalike.err:find "to pass it as id, write id=aGVsbG8= or put it after --"
                                                             1 true)
                                         lookalike.err)
+                      ;; after --, a value shaped like name=value is a value
+                      (assert.are.equal 0 literal.code literal.err)
+                      (assert.are.equal "name: Bas" literal.out)
                       (assert.is_truthy (help.out:find "fetchPet <id> [name=value ...]"
                                                        1 true)
                                         help.out)))))

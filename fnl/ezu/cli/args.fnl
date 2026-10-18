@@ -361,16 +361,21 @@ returns (kind key value); kind is a value of field-prefixes."
 
 (fn parse-args [args]
   (let [r {:path-params []
+           ;; indexes of the path-params given after --: values, whatever
+           ;; their shape
+           :literal {}
            :query {}
            :headers {}
            :ssl {}
            :server-vars {}
-           :body-fields []}
+           :body-fields []} ;; true when a went to path-params
         positional (fn [a]
                      (if (not r.cmd) (tset r :cmd a)
                          (not r.schema) (tset r :schema a)
                          (not r.operation) (tset r :operation a)
-                         (table.insert r.path-params a)))
+                         (do
+                           (table.insert r.path-params a)
+                           true)))
         used [] ;; how workflow inputs were once given: say how they are now
         removed-input (fn [a next-arg]
                         (let [example (or (a:match "^%-%-i%.(.+=.*)$")
@@ -383,9 +388,14 @@ returns (kind key value); kind is a value of field-prefixes."
                                  0)))]
     (var i 1)
     (var options-done false)
+
+    (fn after-options [a]
+      (when (positional a)
+        (tset r.literal (length r.path-params) true)))
+
     (while (<= i (length args))
       (let [a (. args i)]
-        (if options-done (positional a) (= a "--") (set options-done true)
+        (if options-done (after-options a) (= a "--") (set options-done true)
             (not (a:match "^%-")) (positional a) (field-arg a)
             (let [(kind k v) (field-arg a)]
               (table.insert used

@@ -228,12 +228,13 @@ the name it starts with; nil for an argument that doesn't look like one."
     (when key
       (values (key:match "^[^%.]+") key value))))
 
-(fn workflow-arguments [wf schema args]
+(fn workflow-arguments [wf schema args ?literal]
   "Input fields [[key value] ...] from the arguments after the workflow id:
 name=value assignments of its inputs, and positional values for the ones it
 declares positional (x-ezu-args). Anything else stops, saying what to write:
 an argument shaped like name=value is always taken for one, so a mistyped
-name can't pass for a positional value."
+name can't pass for a positional value, unless ?literal (indexes of args
+given after --) says it is a value."
   (let [names (doto (icollect [k (pairs (or (?. schema :properties) {}))]
                       k)
                 (table.sort))
@@ -244,18 +245,19 @@ name can't pass for a positional value."
         id wf.workflowId
         fields []]
     (var next-slot 1)
-    (each [_ a (ipairs args)]
-      (let [(input key value) (assignment a)
+    (each [i a (ipairs args)]
+      (let [(input key value) (when (not (?. ?literal i)) (assignment a))
             slot (. slots next-slot)]
         (if (and input (. known input)) (table.insert fields [key value]) input
             (let [guess (util.closest input names)]
               (die (.. "no input '" input "' in " id
                        (if guess (.. "; did you mean " guess "?") slot
-                           (.. "; to pass it as " slot ", write " slot "=" a) ""))))
-            slot (do
-                  (table.insert fields [slot a])
-                  (set next-slot (+ next-slot 1)))
-            (= 0 (length slots))
+                           (.. "; to pass it as " slot ", write " slot "=" a
+                               " or put it after --")
+                           "")))) slot
+            (do
+              (table.insert fields [slot a])
+              (set next-slot (+ next-slot 1))) (= 0 (length slots))
             (die (.. id
                      " takes no positional arguments: give inputs as name=value"
                      (if (. names 1) (.. ", like " (. names 1) "=" a) "")))
@@ -265,17 +267,17 @@ name can't pass for a positional value."
                                 (table.concat slots ", ") a)))))
     fields))
 
-(fn workflow-inputs [p named doc wf args]
+(fn workflow-inputs [p named doc wf args ?literal]
   "Inputs for a run, lowest priority first: the context's configured inputs,
---inputs, then args, the arguments after the workflow's words, typed by the
-workflow's inputs schema."
+--inputs, then args, the arguments after the workflow's words (?literal: the
+indexes of those given after --), typed by the workflow's inputs schema."
   (let [schema (arazzo.workflow-inputs doc wf)
         base (collect [k v (pairs (or (?. named :inputs) {}))]
                k
                v)]
     (each [k v (pairs (object-option "--inputs" p.arazzo-inputs-blob))]
       (tset base k v))
-    (build-body (workflow-arguments wf schema args) schema base)))
+    (build-body (workflow-arguments wf schema args ?literal) schema base)))
 
 (fn check-inputs [doc wf inputs p]
   "Stop when inputs don't match the workflow's inputs schema, unless --no-validate."
@@ -520,7 +522,11 @@ next to doc unless sources are trusted."
                                                                                 wf)
                                                         (arazzo.positional-inputs wf)
                                                         here)))
-        (let [inputs (workflow-inputs p named target-doc wf target.rest)]
+        (let [;; rest is the end of words, whose first is p.operation
+              offset (- (length words) (length target.rest) 1)
+              literal (collect [i (pairs (or p.literal {}))]
+                        (values (- i offset) true))
+              inputs (workflow-inputs p named target-doc wf target.rest literal)]
           (check-inputs target-doc wf inputs p)
           (execute-workflow context wf inputs p env)))))
 

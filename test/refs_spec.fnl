@@ -173,7 +173,8 @@
                                     :description "theirs"
                                     :required ["a"]
                                     :nullable true}
-                                   (deref root {:$ref "#/defs/x" :nullable true}))))
+                                   (deref root
+                                          {:$ref "#/defs/x" :nullable true}))))
             (it "apply with the target's when both have them"
                 (fn []
                   (assert.are.same {:description "mine"

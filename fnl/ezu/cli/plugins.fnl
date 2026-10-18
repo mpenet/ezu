@@ -44,10 +44,9 @@ macOS, extended attributes take that place (@) and hide it, so the entries
 ls -le lists tell."
   (or (= (mode:sub 11 11) "+")
       (and (= (mode:sub 11 11) "@")
-           (not= nil
-                 (: (command-output (.. "ls -lden " (util.shell-quote path)
-                                        " 2>/dev/null"))
-                    :match "\n%s*%d+: ")))))
+           (not= nil (: (command-output (.. "ls -lden " (util.shell-quote path)
+                                            " 2>/dev/null"))
+                        :match "\n%s*%d+: ")))))
 
 (fn others-can-change? [mode]
   "Whether a file or directory of mode can be changed by group or others:

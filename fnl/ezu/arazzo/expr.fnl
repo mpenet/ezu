@@ -127,20 +127,11 @@ parts = [body] or [header|query|path name...]."
                                  (= (type v) :table) (json.encode v)
                                  (tostring v)))))))
 
-(fn escape-in-literal [text delimiter]
-  "text escaped for a JSONPath string literal between delimiter (' or \"):
-backslashes, that delimiter and control characters (RFC 9535)."
-  (pick-values 1
-               (text:gsub (.. "[%c\\" delimiter "]")
-                          (fn [c]
-                            (if (or (= c "\\") (= c delimiter)) (.. "\\" c)
-                                (string.format "\\u%04x" (string.byte c)))))))
-
 (fn eval-jsonpath-template [ctx s]
   "s, a JSONPath query, with its {$expr} replaced by their values as the query
 reads them: inside a string literal, the value's text escaped for its quotes,
-so a value can't change the query; elsewhere, the value as a JSON literal
-(null when missing)."
+so a value can't change the query; elsewhere, a string as it is and other
+values as JSON literals (null when missing)."
   (let [out []]
     (var delimiter nil)
     (var i 1)
@@ -152,13 +143,17 @@ so a value can't change the query; elsewhere, the value as a JSON literal
                   missing (or (= v nil) (= v json.null))]
               (table.insert out
                             (if delimiter
-                                (escape-in-literal (if missing ""
-                                                       (= (type v) :table)
-                                                       (json.encode v)
-                                                       (tostring v))
-                                                   delimiter)
+                                (jsonpath.escape-string (if missing ""
+                                                            (= (type v) :table)
+                                                            (json.encode v)
+                                                            (tostring v))
+                                                        delimiter)
                                 missing
                                 "null"
+                                ;; text, as the spec has it: a member name or
+                                ;; an index, say
+                                (= (type v) :string)
+                                v
                                 (json.encode v)))
               (set i (+ i (length expr) 2)))
             (do

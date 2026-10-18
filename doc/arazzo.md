@@ -238,7 +238,7 @@ A step calls an operation, named by `operationId` (written `$sourceDescriptions.
 | `$sourceDescriptions.NAME.url` | A field of a source description |
 | `{$expression}` | Inside a string: the expression's value |
 
-Arazzo 1.1 `{$expression}` embedding works in regex and JSONPath conditions and in selectors too. In a JSONPath query, a value embedded in a string literal is escaped for its quotes, so it is matched as written and can't change the query (`@.name == '{$inputs.name}'` finds `O'Brien`); outside a string literal, it goes in as a JSON literal (`@.size == {$inputs.size}`, `null` when missing). A regex gets the value as it is, to embed patterns.
+Arazzo 1.1 `{$expression}` embedding works in regex and JSONPath conditions and in selectors too. In a JSONPath query, a value embedded in a string literal is escaped for its quotes, so it is matched as written and can't change the query (`@.name == '{$inputs.name}'` finds `O'Brien`); outside one, a string goes in as text, as the spec says (`$.{$inputs.field}[{$inputs.index}]`), and other values as JSON literals (`@.size == {$inputs.size}`, `null` when missing). A regex gets the value as it is, to embed patterns.
 
 To reach inside an input or output, add a JSON pointer: `$steps.fetch.outputs.pet#/name`. Names may contain dots, so `$steps.fetch.outputs.pet.name` means an output named `pet.name`; when there is none but there is a `pet`, ezu says to use the pointer form.
 

@@ -540,12 +540,16 @@
                                             "$.items[?@.name == '{$inputs.name}']"))
                   (assert.is_false (passes? {:name "x\\' || @.size > 0 || @.name == '"}
                                             "$.items[?@.name == '{$inputs.name}']"))))
-            (it "are JSON literals outside string literals"
+            (it "are text outside string literals when strings, JSON literals otherwise"
                 (fn []
                   (assert.is_true (passes? {:size 4}
                                            "$.items[?@.size == {$inputs.size}]"))
-                  (assert.is_false (passes? {:size "4"}
-                                            "$.items[?@.size == {$inputs.size}]"))
+                  (assert.is_true (passes? {:size "4"}
+                                           "$.items[?@.size == {$inputs.size}]"))
+                  (assert.is_true (passes? {:field "items" :i "1"}
+                                           "$.{$inputs.field}[{$inputs.i}]"))
+                  (assert.is_true (passes? {:on true}
+                                           "$.items[?{$inputs.on} == true]"))
                   (assert.is_false (passes? {}
                                             "$.items[?@.size == {$inputs.size}]"))))
             (it "are empty strings inside literals when missing"

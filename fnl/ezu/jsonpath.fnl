@@ -562,25 +562,24 @@ for descendants."
 a list of member names and 0-based indexes."
   (select-nodes (compile text) value value))
 
+(local control-escapes {"\b" "\\b" "\f" "\\f" "\n" "\\n" "\r" "\\r" "\t" "\\t"})
+
+(fn escape-string [text delimiter]
+  "text as the inside of a string literal between delimiter (' or \"), with
+the escapes RFC 9535 prescribes: backslash, delimiter, and control
+characters (\\b \\f \\n \\r \\t, else \\uXXXX)."
+  (pick-values 1
+               (text:gsub (.. "[%z\1-\31\\" delimiter "]")
+                          #(if (or (= $ "\\") (= $ delimiter)) (.. "\\" $)
+                               (or (. control-escapes $)
+                                   (string.format "\\u%04x" (string.byte $)))))))
+
 (fn normalized-path [path]
   "The normalized path (RFC 9535 section 2.7) of a list of names and indexes:
 $['a'][0]."
   (.. "$" (table.concat (icollect [_ k (ipairs path)]
                           (if (= (type k) :number)
                               (.. "[" k "]")
-                              (.. "['"
-                                  (pick-values 1
-                                               (k:gsub "[%z\1-\31'\\]"
-                                                       #(match $
-                                                          "\b" "\\b"
-                                                          "\f" "\\f"
-                                                          "\n" "\\n"
-                                                          "\r" "\\r"
-                                                          "\t" "\\t"
-                                                          "'" "\\'"
-                                                          "\\" "\\\\"
-                                                          c (string.format "\\u%04x"
-                                                                           (string.byte c)))))
-                                  "']"))))))
+                              (.. "['" (escape-string k "'") "']"))))))
 
-{: compile :query query-nodes : normalized-path : nothing}
+{: compile :query query-nodes : normalized-path : escape-string : nothing}

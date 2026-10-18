@@ -127,6 +127,53 @@ parts = [body] or [header|query|path name...]."
                                  (= (type v) :table) (json.encode v)
                                  (tostring v)))))))
 
+(fn escape-in-literal [text delimiter]
+  "text escaped for a JSONPath string literal between delimiter (' or \"):
+backslashes, that delimiter and control characters (RFC 9535)."
+  (pick-values 1
+               (text:gsub (.. "[%c\\" delimiter "]")
+                          (fn [c]
+                            (if (or (= c "\\") (= c delimiter)) (.. "\\" c)
+                                (string.format "\\u%04x" (string.byte c)))))))
+
+(fn eval-jsonpath-template [ctx s]
+  "s, a JSONPath query, with its {$expr} replaced by their values as the query
+reads them: inside a string literal, the value's text escaped for its quotes,
+so a value can't change the query; elsewhere, the value as a JSON literal
+(null when missing)."
+  (let [out []]
+    (var delimiter nil)
+    (var i 1)
+    (while (<= i (length s))
+      (let [c (s:sub i i)
+            expr (s:match "^{(%$[^}]+)}" i)]
+        (if expr
+            (let [v (source-field ctx (resolve-expr ctx expr))
+                  missing (or (= v nil) (= v json.null))]
+              (table.insert out
+                            (if delimiter
+                                (escape-in-literal (if missing ""
+                                                       (= (type v) :table)
+                                                       (json.encode v)
+                                                       (tostring v))
+                                                   delimiter)
+                                missing
+                                "null"
+                                (json.encode v)))
+              (set i (+ i (length expr) 2)))
+            (do
+              (table.insert out c)
+              (if (and delimiter (= c "\\"))
+                  (do
+                    (table.insert out (s:sub (+ i 1) (+ i 1)))
+                    (set i (+ i 2)))
+                  (do
+                    (if (= c delimiter) (set delimiter nil)
+                        (and (not delimiter) (or (= c "'") (= c "\""))) (set delimiter
+                                                                             c))
+                    (set i (+ i 1))))))))
+    (table.concat out)))
+
 (local roots {:inputs true
               :outputs true
               :self true
@@ -194,7 +241,9 @@ several nodes an array of their values, none nil. Runtime expressions may be
 embedded in the selector with {}, as in conditions."
   (let [kind (expression-type obj.type)
         data (eval ctx obj.context)
-        selector (eval-template ctx obj.selector)]
+        selector (if (= kind :jsonpath)
+                     (eval-jsonpath-template ctx obj.selector)
+                     (eval-template ctx obj.selector))]
     (match kind
       :jsonpath (let [nodes (jsonpath.query selector data)]
                   (if (= 1 (length nodes)) (. nodes 1 :value)
@@ -433,8 +482,8 @@ Arazzo spec, a doubled quote stands for the quote itself."
                                    (tostring v))))
     :jsonpath (let [v (eval ctx criterion.context)]
                 (and (not= nil v) (not= json.null v)
-                     (< 0 (length (jsonpath.query (eval-template ctx
-                                                                 criterion.condition)
+                     (< 0 (length (jsonpath.query (eval-jsonpath-template ctx
+                                                                          criterion.condition)
                                                   v)))))
     _ (error (.. "a condition can't be of type " kind) 0)))
 
@@ -504,7 +553,10 @@ its context's value, or why it can't be evaluated."
               (.. criterion.condition " (" (table.concat parts ", ") ")")
               criterion.condition))
         ;; the condition as evaluated: embedded {$expressions} substituted
-        (.. kind " " (eval-template ctx criterion.condition)
+        (.. kind " "
+            (if (= kind :jsonpath)
+                (eval-jsonpath-template ctx criterion.condition)
+                (eval-template ctx criterion.condition))
             (if (= kind :regex) " doesn't match " " selects nothing in ")
             (tostring criterion.context) " ("
             (brief (eval ctx criterion.context)) ")"))))

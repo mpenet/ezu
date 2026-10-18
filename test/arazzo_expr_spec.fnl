@@ -508,6 +508,63 @@
                                                   "$workflows.w.outputs.r.id")
                                       "$workflows.w.outputs.r.id: there is no output 'r.id'; for a value inside 'r' use $workflows.w.outputs.r#/id"))))))
 
+(describe "expressions embedded in JSONPath"
+          (fn []
+            (local json (require :ezu.json))
+
+            (fn ctx [inputs]
+              {: inputs
+               :response {:status 200
+                          :headers {}
+                          :body {:items [{:name "O'Brien" :size 3 :id "a"}
+                                         {:name "say \"hi\"" :size 4 :id "b"}
+                                         {:name "plain" :size 5 :id "c"}]}}
+               :steps {}
+               :workflows {}})
+
+            (fn passes? [inputs condition]
+              (expr.eval-criterion (ctx inputs)
+                                   {:context "$response.body"
+                                    :type :jsonpath
+                                    : condition}))
+
+            (it "are values inside string literals, whatever quotes they hold"
+                (fn []
+                  (assert.is_true (passes? {:name "O'Brien"}
+                                           "$.items[?@.name == '{$inputs.name}']"))
+                  (assert.is_true (passes? {:name "say \"hi\""}
+                                           "$.items[?@.name == \"{$inputs.name}\"]"))))
+            (it "can't change the query"
+                (fn []
+                  (assert.is_false (passes? {:name "x' || @.name != 'y"}
+                                            "$.items[?@.name == '{$inputs.name}']"))
+                  (assert.is_false (passes? {:name "x\\' || @.size > 0 || @.name == '"}
+                                            "$.items[?@.name == '{$inputs.name}']"))))
+            (it "are JSON literals outside string literals"
+                (fn []
+                  (assert.is_true (passes? {:size 4}
+                                           "$.items[?@.size == {$inputs.size}]"))
+                  (assert.is_false (passes? {:size "4"}
+                                            "$.items[?@.size == {$inputs.size}]"))
+                  (assert.is_false (passes? {}
+                                            "$.items[?@.size == {$inputs.size}]"))))
+            (it "are empty strings inside literals when missing"
+                (fn []
+                  (assert.is_true (passes? {}
+                                           "$.items[?'{$inputs.kind}' == '']"))))
+            (it "work in selectors, and show escaped in explanations"
+                (fn []
+                  (assert.are.equal "a"
+                                    (expr.eval (ctx {:name "O'Brien"})
+                                               {:context "$response.body"
+                                                :selector "$.items[?@.name == '{$inputs.name}'].id"
+                                                :type "jsonpath"}))
+                  (assert.is_truthy (: (expr.explain-criterion (ctx {:name "it's"})
+                                                               {:context "$response.body"
+                                                                :type :jsonpath
+                                                                :condition "$.items[?@.name == '{$inputs.name}']"})
+                                       :find "== 'it\\'s'" 1 true))))))
+
 (describe "payload evaluation"
           (fn []
             (local json (require :ezu.json))

@@ -236,7 +236,6 @@ A step calls an operation, named by `operationId` (written `$sourceDescriptions.
 | `$outputs.NAME` | In the workflow's `outputs`: one of its outputs defined above |
 | `$self` | The Arazzo document's own URL; relative source URLs resolve against it |
 | `$sourceDescriptions.NAME.url` | A field of a source description |
-| `$find(ARRAY, FIELD, VALUE[, RETURN])` | ezu extension: the first element of `ARRAY` whose `FIELD` is `VALUE`, or its `RETURN` field |
 | `{$expression}` | Inside a string: the expression's value |
 
 Arazzo 1.1 `{$expression}` embedding works in regex and JSONPath conditions and in selectors too.

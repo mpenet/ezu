@@ -276,11 +276,11 @@
                       (assert.is_false passed)
                       (assert.is_truthy (: (tostring why) :find
                                            "unexpected 'null'" 1 true)))))
-              (it "$find accepts a quoted match value"
+              (it "knows no $find: Arazzo has no such expression"
                   (fn []
-                    (assert.are.equal 2
-                                      (expr.resolve-expr ctx
-                                                         "$find($response.body#/items, id, 'c', v)")))))))
+                    (assert.has.error #(expr.resolve-expr ctx
+                                                          "$find($response.body#/items, id, 'c', v)")
+                                      "unknown runtime expression: $find($response.body#/items, id, 'c', v)"))))))
 
 ;; ---- expr: json-pointer ----
 
@@ -432,42 +432,6 @@
                                                          {:condition "$response.body#/count <= 5"})))))))
 
 ;; ---- expr: $find ----
-
-(describe "expr $find"
-          (fn []
-            (let [ctx {:inputs {:name "bob"}
-                       :steps {}
-                       :workflows {}
-                       :response {:status 200
-                                  :headers {}
-                                  :body {:users [{:id "1" :name "alice"}
-                                                 {:id "2" :name "bob"}
-                                                 {:id "3" :name "carol"}]}}
-                       :request nil}]
-              (it "returns matching item when return-field omitted"
-                  (fn []
-                    (assert.are.same {:id "2" :name "bob"}
-                                     (expr.resolve-expr ctx
-                                                        "$find($response.body#/users, name, $inputs.name)"))))
-              (it "returns specific field when return-field given"
-                  (fn []
-                    (assert.are.equal "2"
-                                      (expr.resolve-expr ctx
-                                                         "$find($response.body#/users, name, $inputs.name, id)"))))
-              (it "returns nil when no match"
-                  (fn []
-                    (let [ctx2 {:inputs {:name "nobody"}
-                                :steps {}
-                                :workflows {}
-                                :response {:status 200
-                                           :headers {}
-                                           :body {:users [{:id "1"
-                                                           :name "alice"}]}}
-                                :request nil}]
-                      (assert.is_nil (expr.resolve-expr ctx2
-                                                        "$find($response.body#/users, name, $inputs.name, id)"))))))))
-
-;; ---- expr: $workflows output ----
 
 (describe "expr $workflows"
           (fn []

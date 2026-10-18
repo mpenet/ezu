@@ -32,6 +32,10 @@ All notable changes to ezu, named atlas until 1.0.0-beta7. The format follows [K
 - A workflow failing on a regex or JSONPath condition shows the condition with its `{$expressions}` replaced, and says it `doesn't match` or `selects nothing in` its context; a failure inside a workflow run by a step names that workflow (`step 'find' (instance-id) › step 'list' failed: …`) rather than repeating `failed:`.
 - On a terminal that doesn't report its width, the lines of workflow progress were cut down to `…`; they now fit 80 columns.
 
+### Removed
+
+- `$find(…)`, an ezu-only runtime expression: Arazzo has no such expression, so documents using it ran nowhere else. A JSONPath Selector Object does the same and more: `{context: $response.body, selector: "$.users[?@.name == '{$inputs.name}'].id", type: jsonpath}`.
+
 ## [1.0.0-beta7] - 2026-10-16
 
 ### Changed

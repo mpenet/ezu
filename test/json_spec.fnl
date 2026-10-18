@@ -231,12 +231,6 @@
                     (assert.are.equal "v=" (expr.eval ctx "v={$inputs.n}"))
                     (assert.are.equal "v={\"k\":1}"
                                       (expr.eval ctx "v={$inputs.o}")))))
-            (it "and $find skips elements that aren't objects"
-                (fn []
-                  (assert.are.same {:x 1}
-                                   (expr.eval {:response {:body (json.decode "[1,null,{\"x\":1}]"
-                                                                             true)}}
-                                              "$find($response.body, x, 1)"))))
             (it "boolean and type-array schemas work for fields and help"
                 (fn []
                   (assert.are.equal "123"

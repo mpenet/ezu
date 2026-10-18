@@ -738,7 +738,9 @@
                                           :steps [{:stepId "list"
                                                    :operationId "list-users"
                                                    :successCriteria [{:condition "$statusCode == 200"}]
-                                                   :outputs {:id "$find($response.body#/users, name, $inputs.name, id)"}}]
+                                                   :outputs {:id {:context "$response.body"
+                                                                  :selector "$.users[?@.name == '{$inputs.name}'].id"
+                                                                  :type "jsonpath"}}}]
                                           :outputs {:id "$steps.list.outputs.id"}}]}
                         result (arazzo.run-workflow doc "find-user"
                                                     {:name "bob"} clients {})]

@@ -61,31 +61,11 @@ parts = [body] or [header|query|path name...]."
       _
       (unknown expr))))
 
-(fn find-in [ctx resolve find-body]
-  "$find(array-expr, match-field, match-value[, return-field])"
-  (let [args (icollect [a (find-body:gmatch "[^,]+")] (a:match "^%s*(.-)%s*$"))
-        [arr-expr mfield mval-raw rfield] args
-        arr (resolve ctx arr-expr)
-        mval (if (and mval-raw (mval-raw:match "^%$")) (resolve ctx mval-raw)
-                 (and mval-raw (mval-raw:match "^(['\"]).*%1$")) (mval-raw:sub 2
-                                                                               -2)
-                 mval-raw)]
-    (when (= (type arr) :table)
-      (let [found (accumulate [found nil _ item (ipairs arr) &until found]
-                    (when (and (= (type item) :table) (not= item json.null)
-                               (= (tostring (or (. item mfield) ""))
-                                  (tostring (or mval ""))))
-                      item))]
-        (if (and found rfield) (. found rfield) found)))))
-
 (fn resolve-expr [ctx expr]
   "Resolve a single $... runtime expression to a value."
   (let [e (expr:match "^%$(.+)")]
     (when (not e) (error (.. "not a runtime expression: " expr) 0))
-    (let [find-body (e:match "^find%((.+)%)$")]
-      (if find-body
-          (find-in ctx resolve-expr find-body)
-          (let [head (or (e:match "^([^#]+)") "")
+    (let [head (or (e:match "^([^#]+)") "")
                 parts (icollect [p (head:gmatch "[^%.]+")] p)
                 rest-from #(icollect [i p (ipairs parts)] (when (>= i $) p))]
             (match (. parts 1)
@@ -127,7 +107,7 @@ parts = [body] or [header|query|path name...]."
               ;; source names have no dots, operationIds may
               {:__source (. parts 2) :__operationId (table.concat parts "." 3)}
               _
-              (unknown expr)))))))
+              (unknown expr)))))
 
 ;; ---- template substitution ----
 
@@ -159,8 +139,7 @@ parts = [body] or [header|query|path name...]."
               :request true
               :steps true
               :workflows true
-              :sourceDescriptions true
-              :find true})
+              :sourceDescriptions true})
 
 (fn expression? [s]
   "Whether s is a runtime expression: $ followed by a known root."
@@ -292,8 +271,7 @@ Arazzo spec, a doubled quote stands for the quote itself."
         (set pos ws-end)
         (when (<= pos (length s))
           (let [ch (s:sub pos pos)
-                find-expr (s:match "^%$find%b()" pos)
-                expr (or find-expr (s:match "^%$[^%s()=!<>&|]+" pos))
+                expr (s:match "^%$[^%s()=!<>&|]+" pos)
                 number (s:match "^%-?%d+%.?%d*[eE][%+%-]?%d+" pos)
                 number (or number (s:match "^%-?%d+%.?%d*" pos))
                 word (s:match "^[%a_][%w_%-%.]*" pos)

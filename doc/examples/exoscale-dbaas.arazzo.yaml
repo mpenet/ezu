@@ -1874,7 +1874,7 @@ workflows:
             type: goto
             stepId: delete-clickhouse
             criteria:
-              - condition: $steps.find.outputs.type == 'clickhouse'
+              - condition: $steps.find.outputs.type#/0 == 'clickhouse'
         outputs:
           type:
             context: $response.body
@@ -2733,7 +2733,7 @@ workflows:
             type: jsonpath
             selector: "$.users[?@.username == '{$inputs.username}']"
     outputs:
-      user: $steps.find.outputs.user
+      user: $steps.find.outputs.user#/0
 
   - workflowId: user-show-mysql
     x-ezu-command: user show mysql
@@ -2767,7 +2767,7 @@ workflows:
             type: jsonpath
             selector: "$.users[?@.username == '{$inputs.username}']"
     outputs:
-      user: $steps.find.outputs.user
+      user: $steps.find.outputs.user#/0
 
   - workflowId: user-show-kafka
     x-ezu-command: user show kafka
@@ -2801,7 +2801,7 @@ workflows:
             type: jsonpath
             selector: "$.users[?@.username == '{$inputs.username}']"
     outputs:
-      user: $steps.find.outputs.user
+      user: $steps.find.outputs.user#/0
 
   - workflowId: user-show-opensearch
     x-ezu-command: user show opensearch
@@ -2835,7 +2835,7 @@ workflows:
             type: jsonpath
             selector: "$.users[?@.username == '{$inputs.username}']"
     outputs:
-      user: $steps.find.outputs.user
+      user: $steps.find.outputs.user#/0
 
   - workflowId: user-show-valkey
     x-ezu-command: user show valkey
@@ -2869,7 +2869,7 @@ workflows:
             type: jsonpath
             selector: "$.users[?@.username == '{$inputs.username}']"
     outputs:
-      user: $steps.find.outputs.user
+      user: $steps.find.outputs.user#/0
 
   - workflowId: user-show-grafana
     x-ezu-command: user show grafana
@@ -2903,7 +2903,7 @@ workflows:
             type: jsonpath
             selector: "$.users[?@.username == '{$inputs.username}']"
     outputs:
-      user: $steps.find.outputs.user
+      user: $steps.find.outputs.user#/0
 
   - workflowId: user-show-thanos
     x-ezu-command: user show thanos
@@ -2937,7 +2937,7 @@ workflows:
             type: jsonpath
             selector: "$.users[?@.username == '{$inputs.username}']"
     outputs:
-      user: $steps.find.outputs.user
+      user: $steps.find.outputs.user#/0
 
   - workflowId: user-show-clickhouse
     x-ezu-command: user show clickhouse
@@ -2971,7 +2971,7 @@ workflows:
             type: jsonpath
             selector: "$.users[?@.username == '{$inputs.username}']"
     outputs:
-      user: $steps.find.outputs.user
+      user: $steps.find.outputs.user#/0
 
   - workflowId: user-create-pg
     x-ezu-command: user create pg
@@ -3490,7 +3490,7 @@ workflows:
             value: $inputs.service
           - name: user-uuid
             in: path
-            value: $steps.find.outputs.uuid
+            value: $steps.find.outputs.uuid#/0
         successCriteria:
           - condition: $statusCode == 200
         outputs:
@@ -4956,7 +4956,7 @@ workflows:
         parameters:
           - name: id
             in: path
-            value: $steps.find.outputs.id
+            value: $steps.find.outputs.id#/0
         successCriteria:
           - condition: $statusCode == 200
         outputs:
@@ -5542,7 +5542,7 @@ workflows:
             value: $inputs.service
           - name: role-uuid
             in: path
-            value: $steps.find.outputs.uuid
+            value: $steps.find.outputs.uuid#/0
         successCriteria:
           - condition: $statusCode == 200
         outputs:
@@ -5553,7 +5553,7 @@ workflows:
           - name: id
             value: $steps.delete.outputs.job
     outputs:
-      deleted: $steps.find.outputs.uuid
+      deleted: $steps.find.outputs.uuid#/0
 
   # ---- external endpoints and integrations ----
 
@@ -5589,8 +5589,8 @@ workflows:
             type: jsonpath
             selector: "$['dbaas-endpoints'][?@.name == '{$inputs.endpoint}' || @.id == '{$inputs.endpoint}'].type"
     outputs:
-      id: $steps.find.outputs.id
-      type: $steps.find.outputs.type
+      id: $steps.find.outputs.id#/0
+      type: $steps.find.outputs.type#/0
 
   - workflowId: external-endpoint-list
     x-ezu-command: external-endpoint list

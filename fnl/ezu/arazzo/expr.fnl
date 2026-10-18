@@ -236,9 +236,11 @@ written empty ({}, []), stay as they are."
       value)))
 
 (fn eval-selector [ctx obj]
-  "What a Selector Object selects: a JSONPath query's single node is its value,
-several nodes an array of their values, none nil. Runtime expressions may be
-embedded in the selector with {}, as in conditions."
+  "What a Selector Object selects. A singular JSONPath query (names and indexes
+only, RFC 9535) selects its node's value, or nil; any other query an array of
+its nodes' values, empty when there are none, so a result's type doesn't
+depend on the data. Runtime expressions may be embedded in the selector with
+{}, as in conditions."
   (let [kind (expression-type obj.type)
         data (eval ctx obj.context)
         selector (if (= kind :jsonpath)
@@ -246,8 +248,8 @@ embedded in the selector with {}, as in conditions."
                      (eval-template ctx obj.selector))]
     (match kind
       :jsonpath (let [nodes (jsonpath.query selector data)]
-                  (if (= 1 (length nodes)) (. nodes 1 :value)
-                      (< 1 (length nodes))
+                  (if (. (jsonpath.compile selector) :singular)
+                      (?. nodes 1 :value)
                       (json.array (icollect [_ n (ipairs nodes)]
                                     n.value))))
       :jsonpointer (util.json-pointer data (selector:gsub "^#" ""))

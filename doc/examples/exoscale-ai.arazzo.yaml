@@ -44,7 +44,7 @@ workflows:
             type: jsonpath
             selector: "$.models[?@.name == '{$inputs.model}' || @.id == '{$inputs.model}'].id"
     outputs:
-      id: $steps.find.outputs.id
+      id: $steps.find.outputs.id#/0
 
   - workflowId: deployment-id
     summary: The id of an AI deployment, given its name or id.
@@ -74,7 +74,7 @@ workflows:
             type: jsonpath
             selector: "$.deployments[?@.name == '{$inputs.deployment}' || @.id == '{$inputs.deployment}'].id"
     outputs:
-      id: $steps.find.outputs.id
+      id: $steps.find.outputs.id#/0
 
   - workflowId: api-key-id
     summary: The id of an AI API key, given its name or id.
@@ -104,7 +104,7 @@ workflows:
             type: jsonpath
             selector: "$['ai-api-keys'][?@.name == '{$inputs.api-key}' || @.id == '{$inputs.api-key}'].id"
     outputs:
-      id: $steps.find.outputs.id
+      id: $steps.find.outputs.id#/0
 
   # ---- models ----
 

@@ -45,7 +45,7 @@ workflows:
             type: jsonpath
             selector: "$.vpcs[?@.name == '{$inputs.vpc}' || @.id == '{$inputs.vpc}'].id"
     outputs:
-      id: $steps.find.outputs.id
+      id: $steps.find.outputs.id#/0
 
   - workflowId: subnet-id
     summary: The id of a subnet of a VPC, given its name or id.
@@ -82,7 +82,7 @@ workflows:
             type: jsonpath
             selector: "$.subnets[?@.name == '{$inputs.subnet}' || @.id == '{$inputs.subnet}'].id"
     outputs:
-      id: $steps.find.outputs.id
+      id: $steps.find.outputs.id#/0
 
   # ---- VPCs ----
 

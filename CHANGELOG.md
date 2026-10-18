@@ -6,6 +6,7 @@ All notable changes to ezu, named atlas until 1.0.0-beta7. The format follows [K
 
 ### Changed
 
+- A JSONPath Selector Object's result has a type that depends on the query, not on the data: a singular query (names and indexes only, RFC 9535) gives a value or nothing, and any other query, a filter say, always gives an array, empty when nothing matches. A filter matching one node used to give that node's value: take it with `#/0` (`$steps.find.outputs.id#/0`).
 - Workflow payloads leave out array items that resolve to nothing (an input that isn't given), and an array whose items all do, as they already did for object members: `security-groups: [{id: $steps.sg.outputs.id}]` is left out rather than sent as `[{}]`. A `null` written as an item is still sent.
 - A field of an `array` property (`--b.tags=a`, `tags=a` for a workflow input) adds an item, typed by the items schema, so repeating it builds a list; a JSON array (`[…]`) is still the whole list.
 - **Workflow inputs are `name=value` arguments** (`ezu az vm create name=web1 size=medium`), typed from the inputs schema; `-i`, `--i.`/`--input.`, and `-d`/`--b.` for workflows are gone (they say so). Arguments starting with `-` are always ezu's options and `name=value` ones always inputs, so neither can shadow the other; an unknown input name stops with a suggestion. Positional inputs are those a workflow declares in `x-ezu-args`, no longer guessed from the path parameters of its steps. Completion offers `NAME=` and allowed values; `az --check` checks `x-ezu-args`.

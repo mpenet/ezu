@@ -741,7 +741,7 @@
                                                    :outputs {:id {:context "$response.body"
                                                                   :selector "$.users[?@.name == '{$inputs.name}'].id"
                                                                   :type "jsonpath"}}}]
-                                          :outputs {:id "$steps.list.outputs.id"}}]}
+                                          :outputs {:id "$steps.list.outputs.id#/0"}}]}
                         result (arazzo.run-workflow doc "find-user"
                                                     {:name "bob"} clients {})]
                     (assert.are.equal "u2" result.outputs.id))))))
@@ -1607,7 +1607,7 @@ and record their requests in the returned list."
                                                                   :type "jsonpath"}}}
                                                   {:stepId "make"
                                                    :operationId "create"
-                                                   :requestBody {:payload {:template {:id "$steps.find.outputs.id"}}}}]
+                                                   :requestBody {:payload {:template {:id "$steps.find.outputs.id#/0"}}}}]
                                           :outputs {:vm "$steps.make.outputs.vm"}}]}]
                     (arazzo.run-workflow doc "wf" {:template "Ubuntu"}
                                          {:api client} {})

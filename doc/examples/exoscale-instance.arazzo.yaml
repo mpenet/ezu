@@ -81,9 +81,9 @@ workflows:
           payload:
             name: $inputs.name
             instance-type:
-              id: $steps.instance-type.outputs.id
+              id: $steps.instance-type.outputs.id#/0
             template:
-              id: $steps.template.outputs.id
+              id: $steps.template.outputs.id#/0
             ssh-key:
               name: $inputs.ssh-key
             disk-size: $inputs.disk-size

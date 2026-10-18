@@ -45,7 +45,7 @@ workflows:
             type: jsonpath
             selector: "$['dns-domains'][?@['unicode-name'] == '{$inputs.domain}' || @.id == '{$inputs.domain}'].id"
     outputs:
-      id: $steps.find.outputs.id
+      id: $steps.find.outputs.id#/0
 
   - workflowId: record-id
     summary: The id of a record of a DNS domain, given its name (and type) or id.
@@ -86,7 +86,7 @@ workflows:
             type: jsonpath
             selector: "$['dns-domain-records'][?(@.name == '{$inputs.record}' && ('{$inputs.type}' == '' || @.type == '{$inputs.type}')) || @.id == '{$inputs.record}'].id"
     outputs:
-      id: $steps.find.outputs.id
+      id: $steps.find.outputs.id#/0
 
   # ---- domains ----
 

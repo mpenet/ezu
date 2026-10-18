@@ -46,7 +46,7 @@ workflows:
             type: jsonpath
             selector: "$['sks-clusters'][?@.name == '{$inputs.cluster}' || @.id == '{$inputs.cluster}'].id"
     outputs:
-      id: $steps.find.outputs.id
+      id: $steps.find.outputs.id#/0
 
   - workflowId: nodepool-id
     summary: The ids of an SKS cluster and of one of its nodepools, given their names or ids.
@@ -89,7 +89,7 @@ workflows:
             selector: "$.nodepools[?@.name == '{$inputs.nodepool}' || @.id == '{$inputs.nodepool}'].id"
     outputs:
       cluster: $steps.cluster.outputs.id
-      id: $steps.find.outputs.id
+      id: $steps.find.outputs.id#/0
 
   - workflowId: instance-type-id
     summary: The id of an instance type, given its family and size.
@@ -118,7 +118,7 @@ workflows:
             type: jsonpath
             selector: "$['instance-types'][?@.family == '{$inputs.family}' && @.size == '{$inputs.size}'].id"
     outputs:
-      id: $steps.find.outputs.id
+      id: $steps.find.outputs.id#/0
 
   # ---- clusters ----
 
@@ -293,7 +293,7 @@ workflows:
           payload:
             name: $inputs.name
             description: $inputs.description
-            version: $steps.version.outputs.version
+            version: $steps.version.outputs.version#/0
             level: $inputs.level
             cni: $inputs.cni
             addons: $inputs.addons

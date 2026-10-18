@@ -244,15 +244,23 @@ To reach inside an input or output, add a JSON pointer: `$steps.fetch.outputs.pe
 
 ### Selectors
 
-Wherever a value is expected (outputs, parameter values, payloads), a Selector Object picks part of a value with [JSONPath](https://www.rfc-editor.org/rfc/rfc9535) or a JSON pointer, with runtime expressions embedded in `{}`. One node gives its value, several an array of their values, none no value. This finds an id by name:
+Wherever a value is expected (outputs, parameter values, payloads), a Selector Object picks part of a value with [JSONPath](https://www.rfc-editor.org/rfc/rfc9535) or a JSON pointer, with runtime expressions embedded in `{}`. What a JSONPath selector gives depends on the query, never on the data: a singular query (names and indexes only, as [RFC 9535](https://www.rfc-editor.org/rfc/rfc9535#name-singular-queries) defines it: `$.user.name`, `$.items[0]`) gives its node's value, or no value; any other query (a filter, a wildcard) gives an array, empty when nothing matches. This finds an id by name, and makes sure only one template has that name:
 
 ```yaml
-outputs:
-  id:
-    context: $response.body
-    selector: "$.templates[?@.name == '{$inputs.template}'].id"
-    type: jsonpath
+- stepId: template
+  operationId: list-templates
+  successCriteria:
+    - context: $response.body
+      type: jsonpath
+      condition: "$[?count(@[?@.name == '{$inputs.template}']) == 1]"
+  outputs:
+    id:
+      context: $response.body
+      selector: "$.templates[?@.name == '{$inputs.template}'].id"
+      type: jsonpath
 ```
+
+The output is a one-item array; `$steps.template.outputs.id#/0` is the id.
 
 [`examples/exoscale-instance.arazzo.yaml`](examples/exoscale-instance.arazzo.yaml) uses this to create an Exoscale instance from a template name and an instance type's family and size, then polls the creation job. `type` is `jsonpath` or `jsonpointer`, or an Expression Type Object such as `{type: jsonpath, version: rfc9535}`.
 

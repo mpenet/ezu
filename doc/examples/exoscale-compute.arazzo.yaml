@@ -155,9 +155,9 @@ workflows:
           payload:
             name: $inputs.name
             template:
-              id: $steps.template.outputs.id
+              id: $steps.template.outputs.id#/0
             instance-type:
-              id: $steps.instance-type.outputs.id
+              id: $steps.instance-type.outputs.id#/0
             disk-size: $inputs.disk-size
             ssh-key:
               name: $inputs.ssh-key
@@ -502,7 +502,7 @@ workflows:
           contentType: application/json
           payload:
             template:
-              id: $steps.template.outputs.id
+              id: $steps.template.outputs.id#/0
             disk-size: $inputs.disk-size
         successCriteria:
           - condition: $statusCode == 200
@@ -567,7 +567,7 @@ workflows:
           contentType: application/json
           payload:
             instance-type:
-              id: $steps.instance-type.outputs.id
+              id: $steps.instance-type.outputs.id#/0
         successCriteria:
           - condition: $statusCode == 200
         outputs:
@@ -1650,7 +1650,7 @@ workflows:
         parameters:
           - name: id
             in: path
-            value: $steps.find.outputs.id
+            value: $steps.find.outputs.id#/0
         successCriteria:
           - condition: $statusCode == 200
         outputs:
@@ -1729,7 +1729,7 @@ workflows:
             type: jsonpath
             selector: "$.templates[?@.name == '{$inputs.template}' || @.id == '{$inputs.template}']"
     outputs:
-      template: $steps.find.outputs.template
+      template: $steps.find.outputs.template#/0
 
   - workflowId: template-delete
     x-ezu-command: template delete
@@ -1976,7 +1976,7 @@ workflows:
             type: jsonpath
             selector: "$.templates[?@.name == '{$inputs.template}' || @.id == '{$inputs.template}'].id"
     outputs:
-      id: $steps.find.outputs.id
+      id: $steps.find.outputs.id#/0
 
   # ---- SSH keys ----
 
@@ -3209,7 +3209,7 @@ workflows:
             type: jsonpath
             selector: "$['deploy-targets'][?@.name == '{$inputs.deploy-target}' || @.id == '{$inputs.deploy-target}'].id"
     outputs:
-      id: $steps.find.outputs.id
+      id: $steps.find.outputs.id#/0
 
   # ---- block storage ----
 
@@ -3723,7 +3723,7 @@ workflows:
             type: jsonpath
             selector: "$['block-storage-snapshots'][?@.name == '{$inputs.snapshot}' || @.id == '{$inputs.snapshot}'].id"
     outputs:
-      id: $steps.find.outputs.id
+      id: $steps.find.outputs.id#/0
 
   # ---- instance pools ----
 
@@ -3965,9 +3965,9 @@ workflows:
             min-available: $inputs.min-available
             description: $inputs.description
             template:
-              id: $steps.template.outputs.id
+              id: $steps.template.outputs.id#/0
             instance-type:
-              id: $steps.instance-type.outputs.id
+              id: $steps.instance-type.outputs.id#/0
             disk-size: $inputs.disk-size
             ssh-key:
               name: $inputs.ssh-key
@@ -4254,9 +4254,9 @@ workflows:
             name: $inputs.name
             description: $inputs.description
             template:
-              id: $steps.template.outputs.id
+              id: $steps.template.outputs.id#/0
             instance-type:
-              id: $steps.instance-type.outputs.id
+              id: $steps.instance-type.outputs.id#/0
             disk-size: $inputs.disk-size
             ssh-key:
               name: $inputs.ssh-key
@@ -4455,7 +4455,7 @@ workflows:
             type: jsonpath
             selector: "$['instance-pools'][?@.name == '{$inputs.instance-pool}' || @.id == '{$inputs.instance-pool}'].id"
     outputs:
-      id: $steps.find.outputs.id
+      id: $steps.find.outputs.id#/0
 
   # ---- network load balancers ----
 
@@ -5122,7 +5122,7 @@ workflows:
             type: jsonpath
             selector: "$['load-balancers'][?@.name == '{$inputs.load-balancer}' || @.id == '{$inputs.load-balancer}'].id"
     outputs:
-      id: $steps.find.outputs.id
+      id: $steps.find.outputs.id#/0
 
   - workflowId: load-balancer-service-id
     summary: The id of a network load balancer's service, given its name or id.
@@ -5159,4 +5159,4 @@ workflows:
             type: jsonpath
             selector: "$.services[?@.name == '{$inputs.service}' || @.id == '{$inputs.service}'].id"
     outputs:
-      id: $steps.find.outputs.id
+      id: $steps.find.outputs.id#/0

@@ -39,7 +39,7 @@ workflows:
             type: jsonpath
             selector: "$['kms-keys'][?@.name == '{$inputs.key}' || @.id == '{$inputs.key}'].id"
     outputs:
-      id: $steps.find.outputs.id
+      id: $steps.find.outputs.id#/0
 
   # ---- keys ----
 

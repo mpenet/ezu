@@ -70,7 +70,7 @@ workflows:
             type: jsonpath
             selector: "$.instances[?@.name == '{$inputs.instance}' || @.id == '{$inputs.instance}'].id"
     outputs:
-      id: $steps.find.outputs.id
+      id: $steps.find.outputs.id#/0
 
   - workflowId: security-group-id
     summary: The id of a security group, given its name or id.
@@ -100,7 +100,7 @@ workflows:
             type: jsonpath
             selector: "$['security-groups'][?@.name == '{$inputs.security-group}' || @.id == '{$inputs.security-group}'].id"
     outputs:
-      id: $steps.find.outputs.id
+      id: $steps.find.outputs.id#/0
 
   - workflowId: elastic-ip-id
     summary: The id of an elastic IP, given its address or id.
@@ -130,7 +130,7 @@ workflows:
             type: jsonpath
             selector: "$['elastic-ips'][?@.ip == '{$inputs.elastic-ip}' || @.id == '{$inputs.elastic-ip}'].id"
     outputs:
-      id: $steps.find.outputs.id
+      id: $steps.find.outputs.id#/0
 
   - workflowId: private-network-id
     summary: The id of a private network, given its name or id.
@@ -160,7 +160,7 @@ workflows:
             type: jsonpath
             selector: "$['private-networks'][?@.name == '{$inputs.private-network}' || @.id == '{$inputs.private-network}'].id"
     outputs:
-      id: $steps.find.outputs.id
+      id: $steps.find.outputs.id#/0
 
   - workflowId: anti-affinity-group-id
     summary: The id of an anti-affinity group, given its name or id.
@@ -190,7 +190,7 @@ workflows:
             type: jsonpath
             selector: "$['anti-affinity-groups'][?@.name == '{$inputs.anti-affinity-group}' || @.id == '{$inputs.anti-affinity-group}'].id"
     outputs:
-      id: $steps.find.outputs.id
+      id: $steps.find.outputs.id#/0
 
   - workflowId: block-storage-id
     summary: The id of a block storage volume, given its name or id.
@@ -220,4 +220,4 @@ workflows:
             type: jsonpath
             selector: "$['block-storage-volumes'][?@.name == '{$inputs.volume}' || @.id == '{$inputs.volume}'].id"
     outputs:
-      id: $steps.find.outputs.id
+      id: $steps.find.outputs.id#/0

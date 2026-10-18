@@ -61,7 +61,7 @@ workflows:
             type: jsonpath
             selector: "$['iam-roles'][?@.name == '{$inputs.role}' || @.id == '{$inputs.role}'].id"
     outputs:
-      id: $steps.find.outputs.id
+      id: $steps.find.outputs.id#/0
 
   - workflowId: api-key-id
     summary: The key of an API key, which identifies it, given its name or key.
@@ -87,7 +87,7 @@ workflows:
             type: jsonpath
             selector: "$['api-keys'][?@.name == '{$inputs.api-key}' || @.key == '{$inputs.api-key}'].key"
     outputs:
-      id: $steps.find.outputs.id
+      id: $steps.find.outputs.id#/0
 
   - workflowId: user-id
     summary: The id of a user, and the user, given its email or id.
@@ -121,8 +121,8 @@ workflows:
             type: jsonpath
             selector: "$.users[?@.email == '{$inputs.user}' || @.id == '{$inputs.user}']"
     outputs:
-      id: $steps.find.outputs.id
-      user: $steps.find.outputs.user
+      id: $steps.find.outputs.id#/0
+      user: $steps.find.outputs.user#/0
 
   # ---- roles ----
 

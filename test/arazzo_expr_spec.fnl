@@ -554,11 +554,11 @@
                                            "$.items[?'{$inputs.kind}' == '']"))))
             (it "work in selectors, and show escaped in explanations"
                 (fn []
-                  (assert.are.equal "a"
-                                    (expr.eval (ctx {:name "O'Brien"})
-                                               {:context "$response.body"
-                                                :selector "$.items[?@.name == '{$inputs.name}'].id"
-                                                :type "jsonpath"}))
+                  (assert.are.same ["a"]
+                                   (expr.eval (ctx {:name "O'Brien"})
+                                              {:context "$response.body"
+                                               :selector "$.items[?@.name == '{$inputs.name}'].id"
+                                               :type "jsonpath"}))
                   (assert.is_truthy (: (expr.explain-criterion (ctx {:name "it's"})
                                                                {:context "$response.body"
                                                                 :type :jsonpath
@@ -797,31 +797,35 @@
 
 (describe "Selector Objects"
           (fn []
-            (it "select with JSONPath: one node is its value"
+            (it "select with a singular JSONPath query: its node's value, or nothing"
                 (fn []
                   (assert.are.equal "Rex"
                                     (expr.eval (shop)
                                                {:context "$response.body"
                                                 :selector "$.user.name"
-                                                :type "jsonpath"}))))
-            (it "filter by a runtime expression embedded in the selector"
-                (fn []
-                  (assert.are.equal 5
+                                                :type "jsonpath"}))
+                  (assert.are.equal 1
                                     (expr.eval (shop)
                                                {:context "$response.body"
-                                                :selector "$.items[?@.sku == '{$inputs.sku}'].qty"
-                                                :type "jsonpath"}))))
-            (it "give an array for several nodes and nothing for none"
-                (fn []
-                  (assert.are.same [5 9]
-                                   (expr.eval (shop)
-                                              {:context "$response.body"
-                                               :selector "$.items[?@.qty > 2].qty"
-                                               :type "jsonpath"}))
+                                                :selector "$.items[0].qty"
+                                                :type "jsonpath"}))
                   (assert.is_nil (expr.eval (shop)
                                             {:context "$response.body"
-                                             :selector "$.items[?@.qty > 99]"
+                                             :selector "$.user.nope"
                                              :type "jsonpath"}))))
+            (it "select with any other query an array, whatever the nodes"
+                (fn []
+                  (let [json (require :ezu.json)
+                        select #(expr.eval (shop)
+                                           {:context "$response.body"
+                                            :selector $
+                                            :type "jsonpath"})
+                        one (select "$.items[?@.sku == '{$inputs.sku}'].qty")
+                        none (select "$.items[?@.qty > 99]")]
+                    (assert.are.same [5] one)
+                    (assert.is_true (json.array? one))
+                    (assert.are.same [5 9] (select "$.items[?@.qty > 2].qty"))
+                    (assert.are.equal "[]" (json.encode none)))))
             (it "select with a JSON Pointer"
                 (fn []
                   (assert.are.equal "Rex"

@@ -650,11 +650,10 @@ where the document at location is: local files, or the same origin."
     (and (not (reference:match "^%a[%w+.-]*:"))
          (not (reference:match "^[/~\\]")) (not= nil here) (= here (place url)))))
 
-(fn arazzo-source [doc source-name opts]
-  "{:doc :clients :url} of the Arazzo document doc's source source-name, loaded
-once per run (opts.arazzo-documents, by URL). Unless opts.trust-sources, it
-must be next to doc: a relative reference staying among local files, or on
-doc's origin, $self included."
+(fn source-url [doc source-name ?opts]
+  "Where the Arazzo document doc's source source-name is. Unless
+?opts.trust-sources, it must be next to doc: a relative reference staying
+among local files, or on doc's origin, $self included."
   (let [src (accumulate [found nil _ s (ipairs (or doc.sourceDescriptions []))
                          &until found]
               (when (= s.name source-name) s))]
@@ -665,25 +664,31 @@ doc's origin, $self included."
     (let [location (or (?. doc-sources doc :location) "./")
           base (base-uri doc)
           url (if base (util.resolve-reference base src.url) src.url)]
-      (when (not (or opts.trust-sources (next-to? location src.url url)))
+      (when (not (or (?. ?opts :trust-sources) (next-to? location src.url url)))
         (error (.. "Arazzo source '" source-name
                    "' is not next to the document (" src.url
                    "); it is only loaded with trust-sources") 0))
-      (when (not opts.arazzo-documents)
-        (set opts.arazzo-documents {}))
-      (or (. opts.arazzo-documents url)
-          (let [sub (load-doc url opts)
-                client-opts (collect [k v (pairs opts)]
-                              (when (not= k :on-step) (values k v)))
-                entry {:doc sub
-                       : url
-                       :clients (build-clients sub
-                                               (doto client-opts
-                                                 (tset :server-vars-elsewhere
-                                                       true))
-                                               url)}]
-            (tset opts.arazzo-documents url entry)
-            entry)))))
+      url)))
+
+(fn arazzo-source [doc source-name opts]
+  "{:doc :clients :url} of the Arazzo document doc's source source-name, loaded
+once per run (opts.arazzo-documents, by URL); see source-url."
+  (let [url (source-url doc source-name opts)]
+    (when (not opts.arazzo-documents)
+      (set opts.arazzo-documents {}))
+    (or (. opts.arazzo-documents url)
+        (let [sub (load-doc url opts)
+              client-opts (collect [k v (pairs opts)]
+                            (when (not= k :on-step) (values k v)))
+              entry {:doc sub
+                     : url
+                     :clients (build-clients sub
+                                             (doto client-opts
+                                               (tset :server-vars-elsewhere
+                                                     true))
+                                             url)}]
+          (tset opts.arazzo-documents url entry)
+          entry))))
 
 (fn location [doc]
   "Where doc was loaded from, or nil."
@@ -822,6 +827,7 @@ the step runs again), :op-ref and :calls (:operation or :workflow)."
 
 {:arazzo-source arazzo-source
  :location location
+ :source-url source-url
  :build-clients build-clients
  :find-op-by-id find-op-by-id
  :find-op-by-path find-op-by-path

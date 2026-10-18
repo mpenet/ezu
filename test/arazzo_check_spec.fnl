@@ -310,6 +310,32 @@
                       (assert.is_true (has far
                                            "wf › step call: Arazzo source 'other' is not next to the document"
                                            :error))))))
+            (it "checks command words, and the documents sources mount"
+                (fn []
+                  (let [json (require :ezu.json)
+                        dir "build/check-mounts"
+                        mounted {:arazzo "1.1.0"
+                                 :info {}
+                                 :workflows [{:workflowId "a"
+                                              :x-ezu-command "one"
+                                              :steps []}
+                                             {:workflowId "b"
+                                              :x-ezu-command "one"
+                                              :steps []}]}
+                        index (doc [] {:x-ezu-command "  "}
+                                   {:sourceDescriptions [{:name "sub"
+                                                          :type "arazzo"
+                                                          :url (.. dir
+                                                                   "/sub.json")
+                                                          :x-ezu-command "sub"}]})]
+                    (os.execute (.. "mkdir -p " dir))
+                    (with-open [f (io.open (.. dir "/sub.json") :w)]
+                      (f:write (json.encode mounted)))
+                    (let [problems (check.check index clients {} {})]
+                      (os.execute (.. "rm -rf " dir))
+                      (assert.are.same ["wf: x-ezu-command must be words, like \"instance create\""
+                                        "sub › b: x-ezu-command 'one' is also workflow a's"]
+                                       (messages problems))))))
             (it "reports a workflow's own actions once"
                 (fn []
                   (let [problems (check.check (doc [get-pet

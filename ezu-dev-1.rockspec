@@ -54,6 +54,7 @@ build = {
       ["ezu.cli.progress"] = "lua/ezu/cli/progress.lua",
       ["ezu.cli.plugins"] = "lua/ezu/cli/plugins.lua",
       ["ezu.arazzo.check"] = "lua/ezu/arazzo/check.lua",
+      ["ezu.arazzo.commands"] = "lua/ezu/arazzo/commands.lua",
       ["ezu.unicode-categories"] = "lua/ezu/unicode-categories.lua",
       ["ezu.iregexp"] = "lua/ezu/iregexp.lua",
       ["ezu.jsonpath"] = "lua/ezu/jsonpath.lua",

@@ -1,96 +1,24 @@
-# Exoscale's `exo compute` commands as Arazzo workflows: resources are named
-# by name or id, changes wait for their job to finish and show the result.
-#
-# Name the document in ezu's configuration, with a profile for Exoscale:
-#
-#   "arazzo": {"exo-compute": {"file": ".../exoscale-compute.arazzo.yaml",
-#                              "profile": "exo"}}
-#
-# then make it a command (`ezu az exo-compute --link` prints how):
-#
-#   exo-compute instance-list
-#   exo-compute instance-create web1 template="Linux Ubuntu 24.04 LTS 64-bit" \
-#     size=medium ssh-key=me labels.env=prod
-#   exo-compute instance-stop web1
-#   exo-compute security-group-rule-add web port=443
-#   exo-compute instance-list --server.zone=de-fra-1
-#
-# Where exo takes a resource as NAME|ID, so do these workflows; the zone is
-# the API's server variable (--server.zone, or "server" in the profile).
+# Exoscale's `exo compute` commands as Arazzo workflows, mounted by
+# exoscale.arazzo.yaml as `exo compute`: resources are named by name or id,
+# and changes wait for their job to finish and show the result.
 arazzo: 1.1.0
 info:
   title: Exoscale compute
-  summary: The exo compute commands, as workflows over the Exoscale API.
+  summary: Instances, security groups, elastic IPs, private networks, block storage…
   version: 1.0.0
 sourceDescriptions:
   - name: exoscale
     url: https://openapi-v2.exoscale.com/source.json
     type: openapi
+  # finding ids by name, waiting for jobs
+  - name: common
+    url: exoscale-common.arazzo.yaml
+    type: arazzo
 workflows:
-  # ---- operations ----
-
-  - workflowId: operation-wait
-    summary: Wait until an operation (a job) succeeds, and return what it acted on.
-    x-ezu-args: [id]
-    inputs:
-      type: object
-      required: [id]
-      properties:
-        id:
-          type: string
-          description: Operation id
-    steps:
-      - stepId: poll
-        operationId: get-operation
-        parameters:
-          - name: id
-            in: path
-            value: $inputs.id
-        successCriteria:
-          - condition: $response.body#/state == 'success'
-        onFailure:
-          # still running: ask again in 2 seconds; a failed or timed out
-          # operation ends the workflow with an error
-          - name: pending
-            type: goto
-            stepId: poll
-            retryAfter: 2
-            criteria:
-              - condition: $response.body#/state == 'pending'
-        outputs:
-          reference: $response.body#/reference/id
-    outputs:
-      reference: $steps.poll.outputs.reference
-
   # ---- instances ----
 
-  - workflowId: instance-id
-    summary: The id of an instance, given its name or id.
-    x-ezu-args: [instance]
-    inputs:
-      type: object
-      required: [instance]
-      properties:
-        instance:
-          type: string
-          description: Instance name or id
-    steps:
-      - stepId: find
-        operationId: list-instances
-        successCriteria:
-          - condition: $statusCode == 200
-          - context: $response.body
-            type: jsonpath
-            condition: "$.instances[?@.name == '{$inputs.instance}' || @.id == '{$inputs.instance}']"
-        outputs:
-          id:
-            context: $response.body
-            type: jsonpath
-            selector: "$.instances[?@.name == '{$inputs.instance}' || @.id == '{$inputs.instance}'].id"
-    outputs:
-      id: $steps.find.outputs.id
-
   - workflowId: instance-list
+    x-ezu-command: instance list
     summary: List the instances of the zone.
     steps:
       - stepId: list
@@ -103,6 +31,7 @@ workflows:
       instances: $steps.list.outputs.instances
 
   - workflowId: instance-show
+    x-ezu-command: instance show
     summary: Show an instance.
     x-ezu-args: [instance]
     inputs:
@@ -114,7 +43,7 @@ workflows:
           description: Instance name or id
     steps:
       - stepId: find
-        workflowId: instance-id
+        workflowId: $sourceDescriptions.common.instance-id
         parameters:
           - name: instance
             value: $inputs.instance
@@ -132,6 +61,7 @@ workflows:
       instance: $steps.show.outputs.instance
 
   - workflowId: instance-create
+    x-ezu-command: instance create
     summary: Create an instance, wait until it exists, and show it.
     x-ezu-args: [name]
     inputs:
@@ -230,7 +160,7 @@ workflows:
         outputs:
           job: $response.body#/id
       - stepId: created
-        workflowId: operation-wait
+        workflowId: $sourceDescriptions.common.operation-wait
         parameters:
           - name: id
             value: $steps.create.outputs.job
@@ -241,7 +171,7 @@ workflows:
             criteria:
               - condition: $inputs.private-network == null
       - stepId: network
-        workflowId: private-network-id
+        workflowId: $sourceDescriptions.common.private-network-id
         parameters:
           - name: private-network
             value: $inputs.private-network
@@ -261,7 +191,7 @@ workflows:
         outputs:
           job: $response.body#/id
       - stepId: attached
-        workflowId: operation-wait
+        workflowId: $sourceDescriptions.common.operation-wait
         parameters:
           - name: id
             value: $steps.attach.outputs.job
@@ -279,6 +209,7 @@ workflows:
       instance: $steps.show.outputs.instance
 
   - workflowId: instance-update
+    x-ezu-command: instance update
     summary: Rename an instance or change its labels or public IP assignment.
     x-ezu-args: [instance]
     inputs:
@@ -302,7 +233,7 @@ workflows:
           description: Public IP addresses to assign
     steps:
       - stepId: find
-        workflowId: instance-id
+        workflowId: $sourceDescriptions.common.instance-id
         parameters:
           - name: instance
             value: $inputs.instance
@@ -323,7 +254,7 @@ workflows:
         outputs:
           job: $response.body#/id
       - stepId: done
-        workflowId: operation-wait
+        workflowId: $sourceDescriptions.common.operation-wait
         parameters:
           - name: id
             value: $steps.update.outputs.job
@@ -336,6 +267,7 @@ workflows:
       instance: $steps.show.outputs.instance
 
   - workflowId: instance-delete
+    x-ezu-command: instance delete
     summary: Delete an instance and wait until it is gone.
     x-ezu-args: [instance]
     inputs:
@@ -347,7 +279,7 @@ workflows:
           description: Instance name or id
     steps:
       - stepId: find
-        workflowId: instance-id
+        workflowId: $sourceDescriptions.common.instance-id
         parameters:
           - name: instance
             value: $inputs.instance
@@ -362,7 +294,7 @@ workflows:
         outputs:
           job: $response.body#/id
       - stepId: done
-        workflowId: operation-wait
+        workflowId: $sourceDescriptions.common.operation-wait
         parameters:
           - name: id
             value: $steps.delete.outputs.job
@@ -370,6 +302,7 @@ workflows:
       deleted: $steps.find.outputs.id
 
   - workflowId: instance-start
+    x-ezu-command: instance start
     summary: Start an instance.
     x-ezu-args: [instance]
     inputs:
@@ -385,7 +318,7 @@ workflows:
           description: Boot into a rescue profile
     steps:
       - stepId: find
-        workflowId: instance-id
+        workflowId: $sourceDescriptions.common.instance-id
         parameters:
           - name: instance
             value: $inputs.instance
@@ -404,7 +337,7 @@ workflows:
         outputs:
           job: $response.body#/id
       - stepId: done
-        workflowId: operation-wait
+        workflowId: $sourceDescriptions.common.operation-wait
         parameters:
           - name: id
             value: $steps.start.outputs.job
@@ -417,6 +350,7 @@ workflows:
       instance: $steps.show.outputs.instance
 
   - workflowId: instance-stop
+    x-ezu-command: instance stop
     summary: Stop an instance.
     x-ezu-args: [instance]
     inputs:
@@ -428,7 +362,7 @@ workflows:
           description: Instance name or id
     steps:
       - stepId: find
-        workflowId: instance-id
+        workflowId: $sourceDescriptions.common.instance-id
         parameters:
           - name: instance
             value: $inputs.instance
@@ -443,7 +377,7 @@ workflows:
         outputs:
           job: $response.body#/id
       - stepId: done
-        workflowId: operation-wait
+        workflowId: $sourceDescriptions.common.operation-wait
         parameters:
           - name: id
             value: $steps.stop.outputs.job
@@ -456,6 +390,7 @@ workflows:
       instance: $steps.show.outputs.instance
 
   - workflowId: instance-reboot
+    x-ezu-command: instance reboot
     summary: Reboot an instance.
     x-ezu-args: [instance]
     inputs:
@@ -467,7 +402,7 @@ workflows:
           description: Instance name or id
     steps:
       - stepId: find
-        workflowId: instance-id
+        workflowId: $sourceDescriptions.common.instance-id
         parameters:
           - name: instance
             value: $inputs.instance
@@ -482,7 +417,7 @@ workflows:
         outputs:
           job: $response.body#/id
       - stepId: done
-        workflowId: operation-wait
+        workflowId: $sourceDescriptions.common.operation-wait
         parameters:
           - name: id
             value: $steps.reboot.outputs.job
@@ -495,6 +430,7 @@ workflows:
       instance: $steps.show.outputs.instance
 
   - workflowId: instance-reset
+    x-ezu-command: instance reset
     summary: Reinstall an instance from a template, erasing its disk.
     x-ezu-args: [instance]
     inputs:
@@ -517,7 +453,7 @@ workflows:
           description: New disk size in GiB; the current one by default
     steps:
       - stepId: find
-        workflowId: instance-id
+        workflowId: $sourceDescriptions.common.instance-id
         parameters:
           - name: instance
             value: $inputs.instance
@@ -560,7 +496,7 @@ workflows:
         outputs:
           job: $response.body#/id
       - stepId: done
-        workflowId: operation-wait
+        workflowId: $sourceDescriptions.common.operation-wait
         parameters:
           - name: id
             value: $steps.reset.outputs.job
@@ -573,6 +509,7 @@ workflows:
       instance: $steps.show.outputs.instance
 
   - workflowId: instance-scale
+    x-ezu-command: instance scale
     summary: Change an instance's type; the instance must be stopped.
     x-ezu-args: [instance, size]
     inputs:
@@ -591,7 +528,7 @@ workflows:
           description: Instance type size (micro, small, medium, large…)
     steps:
       - stepId: find
-        workflowId: instance-id
+        workflowId: $sourceDescriptions.common.instance-id
         parameters:
           - name: instance
             value: $inputs.instance
@@ -623,7 +560,7 @@ workflows:
         outputs:
           job: $response.body#/id
       - stepId: done
-        workflowId: operation-wait
+        workflowId: $sourceDescriptions.common.operation-wait
         parameters:
           - name: id
             value: $steps.scale.outputs.job
@@ -636,6 +573,7 @@ workflows:
       instance: $steps.show.outputs.instance
 
   - workflowId: instance-resize-disk
+    x-ezu-command: instance resize-disk
     summary: Grow an instance's disk; the instance must be stopped.
     x-ezu-args: [instance, disk-size]
     inputs:
@@ -650,7 +588,7 @@ workflows:
           description: New disk size in GiB
     steps:
       - stepId: find
-        workflowId: instance-id
+        workflowId: $sourceDescriptions.common.instance-id
         parameters:
           - name: instance
             value: $inputs.instance
@@ -669,7 +607,7 @@ workflows:
         outputs:
           job: $response.body#/id
       - stepId: done
-        workflowId: operation-wait
+        workflowId: $sourceDescriptions.common.operation-wait
         parameters:
           - name: id
             value: $steps.resize.outputs.job
@@ -682,6 +620,7 @@ workflows:
       instance: $steps.show.outputs.instance
 
   - workflowId: instance-reveal-password
+    x-ezu-command: instance reveal-password
     summary: Show the password of an instance created from a template that sets one.
     x-ezu-args: [instance]
     inputs:
@@ -693,7 +632,7 @@ workflows:
           description: Instance name or id
     steps:
       - stepId: find
-        workflowId: instance-id
+        workflowId: $sourceDescriptions.common.instance-id
         parameters:
           - name: instance
             value: $inputs.instance
@@ -711,6 +650,7 @@ workflows:
       password: $steps.reveal.outputs.password
 
   - workflowId: instance-security-group-add
+    x-ezu-command: instance security-group add
     summary: Add an instance to a security group.
     x-ezu-args: [instance, security-group]
     inputs:
@@ -725,12 +665,12 @@ workflows:
           description: Security group name or id
     steps:
       - stepId: find
-        workflowId: instance-id
+        workflowId: $sourceDescriptions.common.instance-id
         parameters:
           - name: instance
             value: $inputs.instance
       - stepId: group
-        workflowId: security-group-id
+        workflowId: $sourceDescriptions.common.security-group-id
         parameters:
           - name: security-group
             value: $inputs.security-group
@@ -750,7 +690,7 @@ workflows:
         outputs:
           job: $response.body#/id
       - stepId: done
-        workflowId: operation-wait
+        workflowId: $sourceDescriptions.common.operation-wait
         parameters:
           - name: id
             value: $steps.attach.outputs.job
@@ -763,6 +703,7 @@ workflows:
       instance: $steps.show.outputs.instance
 
   - workflowId: instance-security-group-remove
+    x-ezu-command: instance security-group remove
     summary: Remove an instance from a security group.
     x-ezu-args: [instance, security-group]
     inputs:
@@ -777,12 +718,12 @@ workflows:
           description: Security group name or id
     steps:
       - stepId: find
-        workflowId: instance-id
+        workflowId: $sourceDescriptions.common.instance-id
         parameters:
           - name: instance
             value: $inputs.instance
       - stepId: group
-        workflowId: security-group-id
+        workflowId: $sourceDescriptions.common.security-group-id
         parameters:
           - name: security-group
             value: $inputs.security-group
@@ -802,7 +743,7 @@ workflows:
         outputs:
           job: $response.body#/id
       - stepId: done
-        workflowId: operation-wait
+        workflowId: $sourceDescriptions.common.operation-wait
         parameters:
           - name: id
             value: $steps.detach.outputs.job
@@ -815,6 +756,7 @@ workflows:
       instance: $steps.show.outputs.instance
 
   - workflowId: instance-private-network-attach
+    x-ezu-command: instance private-network attach
     summary: Attach an instance to a private network.
     x-ezu-args: [instance, private-network]
     inputs:
@@ -832,12 +774,12 @@ workflows:
           description: Address to give the instance, on a managed network
     steps:
       - stepId: find
-        workflowId: instance-id
+        workflowId: $sourceDescriptions.common.instance-id
         parameters:
           - name: instance
             value: $inputs.instance
       - stepId: network
-        workflowId: private-network-id
+        workflowId: $sourceDescriptions.common.private-network-id
         parameters:
           - name: private-network
             value: $inputs.private-network
@@ -858,7 +800,7 @@ workflows:
         outputs:
           job: $response.body#/id
       - stepId: done
-        workflowId: operation-wait
+        workflowId: $sourceDescriptions.common.operation-wait
         parameters:
           - name: id
             value: $steps.attach.outputs.job
@@ -871,6 +813,7 @@ workflows:
       instance: $steps.show.outputs.instance
 
   - workflowId: instance-private-network-detach
+    x-ezu-command: instance private-network detach
     summary: Detach an instance from a private network.
     x-ezu-args: [instance, private-network]
     inputs:
@@ -885,12 +828,12 @@ workflows:
           description: Private network name or id
     steps:
       - stepId: find
-        workflowId: instance-id
+        workflowId: $sourceDescriptions.common.instance-id
         parameters:
           - name: instance
             value: $inputs.instance
       - stepId: network
-        workflowId: private-network-id
+        workflowId: $sourceDescriptions.common.private-network-id
         parameters:
           - name: private-network
             value: $inputs.private-network
@@ -910,7 +853,7 @@ workflows:
         outputs:
           job: $response.body#/id
       - stepId: done
-        workflowId: operation-wait
+        workflowId: $sourceDescriptions.common.operation-wait
         parameters:
           - name: id
             value: $steps.detach.outputs.job
@@ -923,6 +866,7 @@ workflows:
       instance: $steps.show.outputs.instance
 
   - workflowId: instance-elastic-ip-attach
+    x-ezu-command: instance elastic-ip attach
     summary: Attach an elastic IP to an instance.
     x-ezu-args: [instance, elastic-ip]
     inputs:
@@ -937,12 +881,12 @@ workflows:
           description: Elastic IP address or id
     steps:
       - stepId: find
-        workflowId: instance-id
+        workflowId: $sourceDescriptions.common.instance-id
         parameters:
           - name: instance
             value: $inputs.instance
       - stepId: address
-        workflowId: elastic-ip-id
+        workflowId: $sourceDescriptions.common.elastic-ip-id
         parameters:
           - name: elastic-ip
             value: $inputs.elastic-ip
@@ -962,7 +906,7 @@ workflows:
         outputs:
           job: $response.body#/id
       - stepId: done
-        workflowId: operation-wait
+        workflowId: $sourceDescriptions.common.operation-wait
         parameters:
           - name: id
             value: $steps.attach.outputs.job
@@ -975,6 +919,7 @@ workflows:
       instance: $steps.show.outputs.instance
 
   - workflowId: instance-elastic-ip-detach
+    x-ezu-command: instance elastic-ip detach
     summary: Detach an elastic IP from an instance.
     x-ezu-args: [instance, elastic-ip]
     inputs:
@@ -989,12 +934,12 @@ workflows:
           description: Elastic IP address or id
     steps:
       - stepId: find
-        workflowId: instance-id
+        workflowId: $sourceDescriptions.common.instance-id
         parameters:
           - name: instance
             value: $inputs.instance
       - stepId: address
-        workflowId: elastic-ip-id
+        workflowId: $sourceDescriptions.common.elastic-ip-id
         parameters:
           - name: elastic-ip
             value: $inputs.elastic-ip
@@ -1014,7 +959,7 @@ workflows:
         outputs:
           job: $response.body#/id
       - stepId: done
-        workflowId: operation-wait
+        workflowId: $sourceDescriptions.common.operation-wait
         parameters:
           - name: id
             value: $steps.detach.outputs.job
@@ -1029,6 +974,7 @@ workflows:
   # ---- instance snapshots ----
 
   - workflowId: instance-snapshot-list
+    x-ezu-command: instance snapshot list
     summary: List instance snapshots.
     steps:
       - stepId: list
@@ -1041,6 +987,7 @@ workflows:
       snapshots: $steps.list.outputs.snapshots
 
   - workflowId: instance-snapshot-show
+    x-ezu-command: instance snapshot show
     summary: Show an instance snapshot.
     x-ezu-args: [id]
     inputs:
@@ -1065,6 +1012,7 @@ workflows:
       snapshot: $steps.show.outputs.snapshot
 
   - workflowId: instance-snapshot-create
+    x-ezu-command: instance snapshot create
     summary: Snapshot an instance's disk.
     x-ezu-args: [instance]
     inputs:
@@ -1076,7 +1024,7 @@ workflows:
           description: Instance name or id
     steps:
       - stepId: find
-        workflowId: instance-id
+        workflowId: $sourceDescriptions.common.instance-id
         parameters:
           - name: instance
             value: $inputs.instance
@@ -1091,7 +1039,7 @@ workflows:
         outputs:
           job: $response.body#/id
       - stepId: done
-        workflowId: operation-wait
+        workflowId: $sourceDescriptions.common.operation-wait
         parameters:
           - name: id
             value: $steps.create.outputs.job
@@ -1104,6 +1052,7 @@ workflows:
       snapshot: $steps.show.outputs.snapshot
 
   - workflowId: instance-snapshot-delete
+    x-ezu-command: instance snapshot delete
     summary: Delete an instance snapshot.
     x-ezu-args: [id]
     inputs:
@@ -1125,7 +1074,7 @@ workflows:
         outputs:
           job: $response.body#/id
       - stepId: done
-        workflowId: operation-wait
+        workflowId: $sourceDescriptions.common.operation-wait
         parameters:
           - name: id
             value: $steps.delete.outputs.job
@@ -1133,6 +1082,7 @@ workflows:
       deleted: $inputs.id
 
   - workflowId: instance-snapshot-revert
+    x-ezu-command: instance snapshot revert
     summary: Revert an instance to one of its snapshots; the instance must be stopped.
     x-ezu-args: [instance, snapshot]
     inputs:
@@ -1147,7 +1097,7 @@ workflows:
           description: Snapshot id
     steps:
       - stepId: find
-        workflowId: instance-id
+        workflowId: $sourceDescriptions.common.instance-id
         parameters:
           - name: instance
             value: $inputs.instance
@@ -1166,7 +1116,7 @@ workflows:
         outputs:
           job: $response.body#/id
       - stepId: done
-        workflowId: operation-wait
+        workflowId: $sourceDescriptions.common.operation-wait
         parameters:
           - name: id
             value: $steps.revert.outputs.job
@@ -1179,6 +1129,7 @@ workflows:
       instance: $steps.show.outputs.instance
 
   - workflowId: instance-snapshot-export
+    x-ezu-command: instance snapshot export
     summary: Export an instance snapshot, and show where to download it.
     x-ezu-args: [id]
     inputs:
@@ -1200,7 +1151,7 @@ workflows:
         outputs:
           job: $response.body#/id
       - stepId: done
-        workflowId: operation-wait
+        workflowId: $sourceDescriptions.common.operation-wait
         parameters:
           - name: id
             value: $steps.export.outputs.job
@@ -1215,6 +1166,7 @@ workflows:
   # ---- instance types ----
 
   - workflowId: instance-type-list
+    x-ezu-command: instance-type list
     summary: List instance types.
     steps:
       - stepId: list
@@ -1227,6 +1179,7 @@ workflows:
       instance-types: $steps.list.outputs.instance-types
 
   - workflowId: instance-type-show
+    x-ezu-command: instance-type show
     summary: Show an instance type, given its family and size.
     x-ezu-args: [size]
     inputs:
@@ -1269,6 +1222,7 @@ workflows:
   # ---- templates ----
 
   - workflowId: template-list
+    x-ezu-command: template list
     summary: List templates.
     inputs:
       type: object
@@ -1299,6 +1253,7 @@ workflows:
       templates: $steps.list.outputs.templates
 
   - workflowId: template-show
+    x-ezu-command: template show
     summary: Show a template.
     x-ezu-args: [template]
     inputs:
@@ -1334,6 +1289,7 @@ workflows:
       template: $steps.find.outputs.template
 
   - workflowId: template-delete
+    x-ezu-command: template delete
     summary: Delete one of your templates.
     x-ezu-args: [template]
     inputs:
@@ -1371,7 +1327,7 @@ workflows:
         outputs:
           job: $response.body#/id
       - stepId: done
-        workflowId: operation-wait
+        workflowId: $sourceDescriptions.common.operation-wait
         parameters:
           - name: id
             value: $steps.delete.outputs.job
@@ -1381,6 +1337,7 @@ workflows:
   # ---- SSH keys ----
 
   - workflowId: ssh-key-list
+    x-ezu-command: ssh-key list
     summary: List SSH keys.
     steps:
       - stepId: list
@@ -1393,6 +1350,7 @@ workflows:
       ssh-keys: $steps.list.outputs.ssh-keys
 
   - workflowId: ssh-key-show
+    x-ezu-command: ssh-key show
     summary: Show an SSH key.
     x-ezu-args: [name]
     inputs:
@@ -1417,6 +1375,7 @@ workflows:
       ssh-key: $steps.show.outputs.ssh-key
 
   - workflowId: ssh-key-register
+    x-ezu-command: ssh-key register
     summary: Register an SSH public key.
     x-ezu-args: [name, public-key]
     inputs:
@@ -1442,7 +1401,7 @@ workflows:
         outputs:
           job: $response.body#/id
       - stepId: done
-        workflowId: operation-wait
+        workflowId: $sourceDescriptions.common.operation-wait
         parameters:
           - name: id
             value: $steps.register.outputs.job
@@ -1455,6 +1414,7 @@ workflows:
       ssh-key: $steps.show.outputs.ssh-key
 
   - workflowId: ssh-key-delete
+    x-ezu-command: ssh-key delete
     summary: Delete an SSH key.
     x-ezu-args: [name]
     inputs:
@@ -1476,7 +1436,7 @@ workflows:
         outputs:
           job: $response.body#/id
       - stepId: done
-        workflowId: operation-wait
+        workflowId: $sourceDescriptions.common.operation-wait
         parameters:
           - name: id
             value: $steps.delete.outputs.job
@@ -1485,33 +1445,8 @@ workflows:
 
   # ---- security groups ----
 
-  - workflowId: security-group-id
-    summary: The id of a security group, given its name or id.
-    x-ezu-args: [security-group]
-    inputs:
-      type: object
-      required: [security-group]
-      properties:
-        security-group:
-          type: string
-          description: Security group name or id
-    steps:
-      - stepId: find
-        operationId: list-security-groups
-        successCriteria:
-          - condition: $statusCode == 200
-          - context: $response.body
-            type: jsonpath
-            condition: "$['security-groups'][?@.name == '{$inputs.security-group}' || @.id == '{$inputs.security-group}']"
-        outputs:
-          id:
-            context: $response.body
-            type: jsonpath
-            selector: "$['security-groups'][?@.name == '{$inputs.security-group}' || @.id == '{$inputs.security-group}'].id"
-    outputs:
-      id: $steps.find.outputs.id
-
   - workflowId: security-group-list
+    x-ezu-command: security-group list
     summary: List security groups.
     steps:
       - stepId: list
@@ -1524,6 +1459,7 @@ workflows:
       security-groups: $steps.list.outputs.security-groups
 
   - workflowId: security-group-show
+    x-ezu-command: security-group show
     summary: Show a security group with its rules.
     x-ezu-args: [security-group]
     inputs:
@@ -1535,7 +1471,7 @@ workflows:
           description: Security group name or id
     steps:
       - stepId: find
-        workflowId: security-group-id
+        workflowId: $sourceDescriptions.common.security-group-id
         parameters:
           - name: security-group
             value: $inputs.security-group
@@ -1553,6 +1489,7 @@ workflows:
       security-group: $steps.show.outputs.security-group
 
   - workflowId: security-group-create
+    x-ezu-command: security-group create
     summary: Create a security group.
     x-ezu-args: [name]
     inputs:
@@ -1578,7 +1515,7 @@ workflows:
         outputs:
           job: $response.body#/id
       - stepId: done
-        workflowId: operation-wait
+        workflowId: $sourceDescriptions.common.operation-wait
         parameters:
           - name: id
             value: $steps.create.outputs.job
@@ -1591,6 +1528,7 @@ workflows:
       security-group: $steps.show.outputs.security-group
 
   - workflowId: security-group-delete
+    x-ezu-command: security-group delete
     summary: Delete a security group.
     x-ezu-args: [security-group]
     inputs:
@@ -1602,7 +1540,7 @@ workflows:
           description: Security group name or id
     steps:
       - stepId: find
-        workflowId: security-group-id
+        workflowId: $sourceDescriptions.common.security-group-id
         parameters:
           - name: security-group
             value: $inputs.security-group
@@ -1617,7 +1555,7 @@ workflows:
         outputs:
           job: $response.body#/id
       - stepId: done
-        workflowId: operation-wait
+        workflowId: $sourceDescriptions.common.operation-wait
         parameters:
           - name: id
             value: $steps.delete.outputs.job
@@ -1625,6 +1563,7 @@ workflows:
       deleted: $steps.find.outputs.id
 
   - workflowId: security-group-rule-add
+    x-ezu-command: security-group rule add
     summary: Add a rule to a security group, from a network or another group.
     x-ezu-args: [security-group]
     inputs:
@@ -1661,7 +1600,7 @@ workflows:
           description: Description
     steps:
       - stepId: find
-        workflowId: security-group-id
+        workflowId: $sourceDescriptions.common.security-group-id
         parameters:
           - name: security-group
             value: $inputs.security-group
@@ -1693,7 +1632,7 @@ workflows:
         outputs:
           job: $response.body#/id
       - stepId: done
-        workflowId: operation-wait
+        workflowId: $sourceDescriptions.common.operation-wait
         parameters:
           - name: id
             value: $steps.add.outputs.job
@@ -1723,7 +1662,7 @@ workflows:
         outputs:
           job: $response.body#/id
       - stepId: done-range
-        workflowId: operation-wait
+        workflowId: $sourceDescriptions.common.operation-wait
         parameters:
           - name: id
             value: $steps.add-range.outputs.job
@@ -1736,6 +1675,7 @@ workflows:
       security-group: $steps.show.outputs.security-group
 
   - workflowId: security-group-rule-delete
+    x-ezu-command: security-group rule delete
     summary: Delete a rule of a security group.
     x-ezu-args: [security-group, rule]
     inputs:
@@ -1750,7 +1690,7 @@ workflows:
           description: Rule id, as security-group-show lists them
     steps:
       - stepId: find
-        workflowId: security-group-id
+        workflowId: $sourceDescriptions.common.security-group-id
         parameters:
           - name: security-group
             value: $inputs.security-group
@@ -1768,7 +1708,7 @@ workflows:
         outputs:
           job: $response.body#/id
       - stepId: done
-        workflowId: operation-wait
+        workflowId: $sourceDescriptions.common.operation-wait
         parameters:
           - name: id
             value: $steps.delete.outputs.job
@@ -1781,6 +1721,7 @@ workflows:
       security-group: $steps.show.outputs.security-group
 
   - workflowId: security-group-source-add
+    x-ezu-command: security-group source add
     summary: Add an external source (a CIDR) to a security group.
     x-ezu-args: [security-group, cidr]
     inputs:
@@ -1795,7 +1736,7 @@ workflows:
           description: Network, as 192.0.2.0/24
     steps:
       - stepId: find
-        workflowId: security-group-id
+        workflowId: $sourceDescriptions.common.security-group-id
         parameters:
           - name: security-group
             value: $inputs.security-group
@@ -1814,7 +1755,7 @@ workflows:
         outputs:
           job: $response.body#/id
       - stepId: done
-        workflowId: operation-wait
+        workflowId: $sourceDescriptions.common.operation-wait
         parameters:
           - name: id
             value: $steps.add.outputs.job
@@ -1827,6 +1768,7 @@ workflows:
       security-group: $steps.show.outputs.security-group
 
   - workflowId: security-group-source-remove
+    x-ezu-command: security-group source remove
     summary: Remove an external source (a CIDR) from a security group.
     x-ezu-args: [security-group, cidr]
     inputs:
@@ -1841,7 +1783,7 @@ workflows:
           description: Network, as 192.0.2.0/24
     steps:
       - stepId: find
-        workflowId: security-group-id
+        workflowId: $sourceDescriptions.common.security-group-id
         parameters:
           - name: security-group
             value: $inputs.security-group
@@ -1860,7 +1802,7 @@ workflows:
         outputs:
           job: $response.body#/id
       - stepId: done
-        workflowId: operation-wait
+        workflowId: $sourceDescriptions.common.operation-wait
         parameters:
           - name: id
             value: $steps.remove.outputs.job
@@ -1874,33 +1816,8 @@ workflows:
 
   # ---- elastic IPs ----
 
-  - workflowId: elastic-ip-id
-    summary: The id of an elastic IP, given its address or id.
-    x-ezu-args: [elastic-ip]
-    inputs:
-      type: object
-      required: [elastic-ip]
-      properties:
-        elastic-ip:
-          type: string
-          description: Elastic IP address or id
-    steps:
-      - stepId: find
-        operationId: list-elastic-ips
-        successCriteria:
-          - condition: $statusCode == 200
-          - context: $response.body
-            type: jsonpath
-            condition: "$['elastic-ips'][?@.ip == '{$inputs.elastic-ip}' || @.id == '{$inputs.elastic-ip}']"
-        outputs:
-          id:
-            context: $response.body
-            type: jsonpath
-            selector: "$['elastic-ips'][?@.ip == '{$inputs.elastic-ip}' || @.id == '{$inputs.elastic-ip}'].id"
-    outputs:
-      id: $steps.find.outputs.id
-
   - workflowId: elastic-ip-list
+    x-ezu-command: elastic-ip list
     summary: List elastic IPs.
     steps:
       - stepId: list
@@ -1913,6 +1830,7 @@ workflows:
       elastic-ips: $steps.list.outputs.elastic-ips
 
   - workflowId: elastic-ip-show
+    x-ezu-command: elastic-ip show
     summary: Show an elastic IP.
     x-ezu-args: [elastic-ip]
     inputs:
@@ -1924,7 +1842,7 @@ workflows:
           description: Elastic IP address or id
     steps:
       - stepId: find
-        workflowId: elastic-ip-id
+        workflowId: $sourceDescriptions.common.elastic-ip-id
         parameters:
           - name: elastic-ip
             value: $inputs.elastic-ip
@@ -1942,6 +1860,7 @@ workflows:
       elastic-ip: $steps.show.outputs.elastic-ip
 
   - workflowId: elastic-ip-create
+    x-ezu-command: elastic-ip create
     summary: Create an elastic IP.
     inputs:
       type: object
@@ -1973,7 +1892,7 @@ workflows:
         outputs:
           job: $response.body#/id
       - stepId: done
-        workflowId: operation-wait
+        workflowId: $sourceDescriptions.common.operation-wait
         parameters:
           - name: id
             value: $steps.create.outputs.job
@@ -1986,6 +1905,7 @@ workflows:
       elastic-ip: $steps.show.outputs.elastic-ip
 
   - workflowId: elastic-ip-delete
+    x-ezu-command: elastic-ip delete
     summary: Delete an elastic IP.
     x-ezu-args: [elastic-ip]
     inputs:
@@ -1997,7 +1917,7 @@ workflows:
           description: Elastic IP address or id
     steps:
       - stepId: find
-        workflowId: elastic-ip-id
+        workflowId: $sourceDescriptions.common.elastic-ip-id
         parameters:
           - name: elastic-ip
             value: $inputs.elastic-ip
@@ -2012,7 +1932,7 @@ workflows:
         outputs:
           job: $response.body#/id
       - stepId: done
-        workflowId: operation-wait
+        workflowId: $sourceDescriptions.common.operation-wait
         parameters:
           - name: id
             value: $steps.delete.outputs.job
@@ -2021,33 +1941,8 @@ workflows:
 
   # ---- private networks ----
 
-  - workflowId: private-network-id
-    summary: The id of a private network, given its name or id.
-    x-ezu-args: [private-network]
-    inputs:
-      type: object
-      required: [private-network]
-      properties:
-        private-network:
-          type: string
-          description: Private network name or id
-    steps:
-      - stepId: find
-        operationId: list-private-networks
-        successCriteria:
-          - condition: $statusCode == 200
-          - context: $response.body
-            type: jsonpath
-            condition: "$['private-networks'][?@.name == '{$inputs.private-network}' || @.id == '{$inputs.private-network}']"
-        outputs:
-          id:
-            context: $response.body
-            type: jsonpath
-            selector: "$['private-networks'][?@.name == '{$inputs.private-network}' || @.id == '{$inputs.private-network}'].id"
-    outputs:
-      id: $steps.find.outputs.id
-
   - workflowId: private-network-list
+    x-ezu-command: private-network list
     summary: List private networks.
     steps:
       - stepId: list
@@ -2060,6 +1955,7 @@ workflows:
       private-networks: $steps.list.outputs.private-networks
 
   - workflowId: private-network-show
+    x-ezu-command: private-network show
     summary: Show a private network and its leases.
     x-ezu-args: [private-network]
     inputs:
@@ -2071,7 +1967,7 @@ workflows:
           description: Private network name or id
     steps:
       - stepId: find
-        workflowId: private-network-id
+        workflowId: $sourceDescriptions.common.private-network-id
         parameters:
           - name: private-network
             value: $inputs.private-network
@@ -2089,6 +1985,7 @@ workflows:
       private-network: $steps.show.outputs.private-network
 
   - workflowId: private-network-create
+    x-ezu-command: private-network create
     summary: Create a private network, managed when given a range of addresses.
     x-ezu-args: [name]
     inputs:
@@ -2132,7 +2029,7 @@ workflows:
         outputs:
           job: $response.body#/id
       - stepId: done
-        workflowId: operation-wait
+        workflowId: $sourceDescriptions.common.operation-wait
         parameters:
           - name: id
             value: $steps.create.outputs.job
@@ -2145,6 +2042,7 @@ workflows:
       private-network: $steps.show.outputs.private-network
 
   - workflowId: private-network-delete
+    x-ezu-command: private-network delete
     summary: Delete a private network.
     x-ezu-args: [private-network]
     inputs:
@@ -2156,7 +2054,7 @@ workflows:
           description: Private network name or id
     steps:
       - stepId: find
-        workflowId: private-network-id
+        workflowId: $sourceDescriptions.common.private-network-id
         parameters:
           - name: private-network
             value: $inputs.private-network
@@ -2171,7 +2069,7 @@ workflows:
         outputs:
           job: $response.body#/id
       - stepId: done
-        workflowId: operation-wait
+        workflowId: $sourceDescriptions.common.operation-wait
         parameters:
           - name: id
             value: $steps.delete.outputs.job
@@ -2180,33 +2078,8 @@ workflows:
 
   # ---- anti-affinity groups ----
 
-  - workflowId: anti-affinity-group-id
-    summary: The id of an anti-affinity group, given its name or id.
-    x-ezu-args: [anti-affinity-group]
-    inputs:
-      type: object
-      required: [anti-affinity-group]
-      properties:
-        anti-affinity-group:
-          type: string
-          description: Anti-affinity group name or id
-    steps:
-      - stepId: find
-        operationId: list-anti-affinity-groups
-        successCriteria:
-          - condition: $statusCode == 200
-          - context: $response.body
-            type: jsonpath
-            condition: "$['anti-affinity-groups'][?@.name == '{$inputs.anti-affinity-group}' || @.id == '{$inputs.anti-affinity-group}']"
-        outputs:
-          id:
-            context: $response.body
-            type: jsonpath
-            selector: "$['anti-affinity-groups'][?@.name == '{$inputs.anti-affinity-group}' || @.id == '{$inputs.anti-affinity-group}'].id"
-    outputs:
-      id: $steps.find.outputs.id
-
   - workflowId: anti-affinity-group-list
+    x-ezu-command: anti-affinity-group list
     summary: List anti-affinity groups.
     steps:
       - stepId: list
@@ -2219,6 +2092,7 @@ workflows:
       anti-affinity-groups: $steps.list.outputs.anti-affinity-groups
 
   - workflowId: anti-affinity-group-show
+    x-ezu-command: anti-affinity-group show
     summary: Show an anti-affinity group and its instances.
     x-ezu-args: [anti-affinity-group]
     inputs:
@@ -2230,7 +2104,7 @@ workflows:
           description: Anti-affinity group name or id
     steps:
       - stepId: find
-        workflowId: anti-affinity-group-id
+        workflowId: $sourceDescriptions.common.anti-affinity-group-id
         parameters:
           - name: anti-affinity-group
             value: $inputs.anti-affinity-group
@@ -2248,6 +2122,7 @@ workflows:
       anti-affinity-group: $steps.show.outputs.anti-affinity-group
 
   - workflowId: anti-affinity-group-create
+    x-ezu-command: anti-affinity-group create
     summary: Create an anti-affinity group.
     x-ezu-args: [name]
     inputs:
@@ -2273,7 +2148,7 @@ workflows:
         outputs:
           job: $response.body#/id
       - stepId: done
-        workflowId: operation-wait
+        workflowId: $sourceDescriptions.common.operation-wait
         parameters:
           - name: id
             value: $steps.create.outputs.job
@@ -2286,6 +2161,7 @@ workflows:
       anti-affinity-group: $steps.show.outputs.anti-affinity-group
 
   - workflowId: anti-affinity-group-delete
+    x-ezu-command: anti-affinity-group delete
     summary: Delete an anti-affinity group.
     x-ezu-args: [anti-affinity-group]
     inputs:
@@ -2297,7 +2173,7 @@ workflows:
           description: Anti-affinity group name or id
     steps:
       - stepId: find
-        workflowId: anti-affinity-group-id
+        workflowId: $sourceDescriptions.common.anti-affinity-group-id
         parameters:
           - name: anti-affinity-group
             value: $inputs.anti-affinity-group
@@ -2312,7 +2188,7 @@ workflows:
         outputs:
           job: $response.body#/id
       - stepId: done
-        workflowId: operation-wait
+        workflowId: $sourceDescriptions.common.operation-wait
         parameters:
           - name: id
             value: $steps.delete.outputs.job
@@ -2322,6 +2198,7 @@ workflows:
   # ---- deploy targets ----
 
   - workflowId: deploy-target-list
+    x-ezu-command: deploy-target list
     summary: List deploy targets.
     steps:
       - stepId: list
@@ -2334,6 +2211,7 @@ workflows:
       deploy-targets: $steps.list.outputs.deploy-targets
 
   - workflowId: deploy-target-show
+    x-ezu-command: deploy-target show
     summary: Show a deploy target.
     x-ezu-args: [deploy-target]
     inputs:
@@ -2361,33 +2239,8 @@ workflows:
 
   # ---- block storage ----
 
-  - workflowId: block-storage-id
-    summary: The id of a block storage volume, given its name or id.
-    x-ezu-args: [volume]
-    inputs:
-      type: object
-      required: [volume]
-      properties:
-        volume:
-          type: string
-          description: Volume name or id
-    steps:
-      - stepId: find
-        operationId: list-block-storage-volumes
-        successCriteria:
-          - condition: $statusCode == 200
-          - context: $response.body
-            type: jsonpath
-            condition: "$['block-storage-volumes'][?@.name == '{$inputs.volume}' || @.id == '{$inputs.volume}']"
-        outputs:
-          id:
-            context: $response.body
-            type: jsonpath
-            selector: "$['block-storage-volumes'][?@.name == '{$inputs.volume}' || @.id == '{$inputs.volume}'].id"
-    outputs:
-      id: $steps.find.outputs.id
-
   - workflowId: block-storage-list
+    x-ezu-command: block-storage list
     summary: List block storage volumes.
     steps:
       - stepId: list
@@ -2400,6 +2253,7 @@ workflows:
       volumes: $steps.list.outputs.volumes
 
   - workflowId: block-storage-show
+    x-ezu-command: block-storage show
     summary: Show a block storage volume.
     x-ezu-args: [volume]
     inputs:
@@ -2411,7 +2265,7 @@ workflows:
           description: Volume name or id
     steps:
       - stepId: find
-        workflowId: block-storage-id
+        workflowId: $sourceDescriptions.common.block-storage-id
         parameters:
           - name: volume
             value: $inputs.volume
@@ -2429,6 +2283,7 @@ workflows:
       volume: $steps.show.outputs.volume
 
   - workflowId: block-storage-create
+    x-ezu-command: block-storage create
     summary: Create a block storage volume.
     x-ezu-args: [name]
     inputs:
@@ -2460,7 +2315,7 @@ workflows:
         outputs:
           job: $response.body#/id
       - stepId: done
-        workflowId: operation-wait
+        workflowId: $sourceDescriptions.common.operation-wait
         parameters:
           - name: id
             value: $steps.create.outputs.job
@@ -2473,6 +2328,7 @@ workflows:
       volume: $steps.show.outputs.volume
 
   - workflowId: block-storage-delete
+    x-ezu-command: block-storage delete
     summary: Delete a block storage volume.
     x-ezu-args: [volume]
     inputs:
@@ -2484,7 +2340,7 @@ workflows:
           description: Volume name or id
     steps:
       - stepId: find
-        workflowId: block-storage-id
+        workflowId: $sourceDescriptions.common.block-storage-id
         parameters:
           - name: volume
             value: $inputs.volume
@@ -2499,7 +2355,7 @@ workflows:
         outputs:
           job: $response.body#/id
       - stepId: done
-        workflowId: operation-wait
+        workflowId: $sourceDescriptions.common.operation-wait
         parameters:
           - name: id
             value: $steps.delete.outputs.job
@@ -2507,6 +2363,7 @@ workflows:
       deleted: $steps.find.outputs.id
 
   - workflowId: block-storage-attach
+    x-ezu-command: block-storage attach
     summary: Attach a block storage volume to an instance.
     x-ezu-args: [volume, instance]
     inputs:
@@ -2521,12 +2378,12 @@ workflows:
           description: Instance name or id
     steps:
       - stepId: find
-        workflowId: block-storage-id
+        workflowId: $sourceDescriptions.common.block-storage-id
         parameters:
           - name: volume
             value: $inputs.volume
       - stepId: instance
-        workflowId: instance-id
+        workflowId: $sourceDescriptions.common.instance-id
         parameters:
           - name: instance
             value: $inputs.instance
@@ -2546,7 +2403,7 @@ workflows:
         outputs:
           job: $response.body#/id
       - stepId: done
-        workflowId: operation-wait
+        workflowId: $sourceDescriptions.common.operation-wait
         parameters:
           - name: id
             value: $steps.attach.outputs.job
@@ -2559,6 +2416,7 @@ workflows:
       volume: $steps.show.outputs.volume
 
   - workflowId: block-storage-detach
+    x-ezu-command: block-storage detach
     summary: Detach a block storage volume from its instance.
     x-ezu-args: [volume]
     inputs:
@@ -2570,7 +2428,7 @@ workflows:
           description: Volume name or id
     steps:
       - stepId: find
-        workflowId: block-storage-id
+        workflowId: $sourceDescriptions.common.block-storage-id
         parameters:
           - name: volume
             value: $inputs.volume
@@ -2585,7 +2443,7 @@ workflows:
         outputs:
           job: $response.body#/id
       - stepId: done
-        workflowId: operation-wait
+        workflowId: $sourceDescriptions.common.operation-wait
         parameters:
           - name: id
             value: $steps.detach.outputs.job

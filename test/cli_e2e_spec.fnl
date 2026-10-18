@@ -862,7 +862,8 @@ does, which a streaming transport hands over one by one."
                 (fn []
                   (let [r (ezu-run ["az" "flows" "fetchPett" "--check"])]
                     (assert.are.equal 1 r.code)
-                    (assert.are.equal "Unknown workflow: fetchPett\n" r.err))))
+                    (assert.are.equal "Unknown workflow: fetchPett; did you mean fetchPet?\n"
+                                      r.err))))
             (it "lists what is wrong in a document, and fails"
                 (fn []
                   (let [json (require :ezu.json)
@@ -1906,6 +1907,98 @@ absolute path, so not next to it."
                     (assert.is_truthy (r.err:find "config: arazzo index: trust-sources must be true or false"
                                                   1 true)
                                       r.err))))))
+
+(describe "command words"
+          (fn []
+            (local json (require :ezu.json))
+
+            (fn exo-config []
+              "A config naming exo: an index mounting a document of pet
+commands, written to a new directory."
+              (let [dir (os.tmpname)
+                    write (fn [name t]
+                            (with-open [f (io.open (.. dir "/" name) :w)]
+                              (f:write (json.encode t))))
+                    pets (with-open [f (io.open "test/fixtures/cli-flow.arazzo.json")]
+                           (json.decode (f:read :*a)))
+                    fetch (. pets :workflows 1)]
+                (os.remove dir)
+                (os.execute (.. "mkdir -p '" dir "'"))
+                (set (. pets :sourceDescriptions 1 :url)
+                     (.. (os.getenv "PWD") "/test/fixtures/cli-api.json"))
+                (set pets.info
+                     {:title "pets" :version "1" :summary "Pet commands"})
+                (set fetch.summary "Fetch a pet")
+                (set (. fetch :x-ezu-command) "pet get")
+                (set (. fetch :x-ezu-args) [:id])
+                (write "pets.json" pets)
+                (write "index.json"
+                       {:arazzo "1.1.0"
+                        :info {:title "exo" :version "1"}
+                        :sourceDescriptions [{:name "pets"
+                                              :type "arazzo"
+                                              :url "pets.json"
+                                              :x-ezu-command "pets"}]
+                        :workflows []})
+                (values (doto (collect [k v (pairs config)] k v)
+                          (tset :arazzo {:exo {:file (.. dir "/index.json")}}))
+                        dir)))
+
+            (fn exo [args ?routes]
+              (let [(cfg dir) (exo-config)
+                    r (with-config cfg #(ezu-run args ?routes "/usr/bin/exo"))]
+                (os.execute (.. "rm -rf '" dir "'"))
+                r))
+
+            (local routes
+                   {"GET https://api.test/pets/7" (respond 200 {:name "Rex"})})
+            (it "runs a workflow by its words, in a mounted document"
+                (fn []
+                  (let [r (exo ["pets" "pet" "get" "7" "--output=yaml"] routes)]
+                    (assert.are.equal 0 r.code r.err)
+                    (assert.are.equal "name: Rex" r.out))
+                  (let [r (exo ["pets" "fetchPet" "id=7" "--output=yaml"]
+                               routes)]
+                    (assert.are.equal 0 r.code r.err)
+                    (assert.are.equal "name: Rex" r.out))))
+            (it "lists the commands of a group"
+                (fn []
+                  (assert.are.equal "pets  Pet commands" (. (exo []) :out))
+                  (assert.are.equal "pet  get" (. (exo ["pets"]) :out))
+                  (assert.are.equal "get  Fetch a pet"
+                                    (. (exo ["pets" "pet"]) :out))))
+            (it "says which word names nothing"
+                (fn []
+                  (let [r (exo ["pets" "pett" "get"])]
+                    (assert.are.equal 1 r.code)
+                    (assert.is_truthy (r.err:find "no command 'pett' in exo pets; did you mean pet?"
+                                                  1 true)
+                                      r.err))))
+            (it "shows a workflow's help with its command line"
+                (fn []
+                  (let [r (exo ["pets" "pet" "get" "--help"])]
+                    (assert.are.equal 0 r.code r.err)
+                    (assert.is_truthy (r.out:find "Usage: exo pets pet get <id> [name=value ...]"
+                                                  1 true)
+                                      r.out))))
+            (it "completes words, then inputs"
+                (fn []
+                  (assert.are.equal "pets"
+                                    (. (exo ["__complete" "exo p"]) :out))
+                  (assert.are.equal "pet"
+                                    (. (exo ["__complete" "exo pets "]) :out))
+                  (assert.are.equal "get"
+                                    (. (exo ["__complete" "exo pets pet "])
+                                       :out))
+                  (assert.are.equal "id="
+                                    (. (exo ["__complete" "exo pets pet get i"])
+                                       :out))))
+            (it "checks the documents it mounts"
+                (fn []
+                  (let [r (exo ["--check"])]
+                    (assert.are.equal 0 r.code (.. r.out r.err))
+                    (assert.are.equal "✓ 2 documents, 1 workflow, 1 step: nothing wrong found"
+                                      r.out))))))
 
 (describe "--check-response"
           (fn []

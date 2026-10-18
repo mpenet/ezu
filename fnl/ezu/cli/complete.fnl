@@ -2,6 +2,7 @@
 ;; ABOUTME: backend plus the fish, bash and zsh scripts that call it.
 (local ezu (require :ezu))
 (local arazzo (require :ezu.arazzo))
+(local commands (require :ezu.arazzo.commands))
 (local util (require :ezu.util))
 (local http-mod (require :ezu.http))
 (local {: field-prefixes : options : option-by-name} (require :ezu.cli.args))
@@ -150,10 +151,12 @@ typed, and the positional words (values of `--name value` options skipped)."
 but not for the line completion sees."
   (if (path:match "^~/") (.. (or (os.getenv :HOME) "~") (path:sub 2)) path))
 
-(fn completion-context [ctx words [cmd target name]]
+(fn completion-context [ctx words positional]
   "What the line refers to: an op schema's operations, server and current
-operation, or an Arazzo document's workflow and inputs."
+operation, or what the words after an Arazzo document name: the commands of
+a group (:entries), or a workflow and its inputs."
   (let [config (or ctx.config {})
+        [cmd target name] positional
         c {}]
     (when (and (= cmd :op) target)
       (let [(_ profile) (pcall find-profile config target)
@@ -184,10 +187,28 @@ operation, or an Arazzo document's workflow and inputs."
                                 (home-path target))
                             {:timeout ctx.timeout})]
         (when (and ok (= (type doc) :table))
-          (set c.doc doc)
-          (set c.workflow (arazzo.find-workflow doc name))
-          (set c.inputs
-               (when c.workflow (arazzo.workflow-inputs doc c.workflow))))))
+          (let [after (icollect [i w (ipairs positional)]
+                        (when (> i 2) w))
+                trust {:trust-sources (or (= true
+                                             (?. config :arazzo target
+                                                 :trust-sources))
+                                          (accumulate [found false _ w (ipairs words)]
+                                            (or found (= w "--trust-sources"))))}
+                load (fn [d source]
+                       (ctx.load-doc (arazzo.source-url d source.name trust)
+                                     {:timeout ctx.timeout}))
+                (resolved r) (pcall commands.resolve doc after load)]
+            (when resolved
+              (match r.kind
+                :workflow (do
+                            (set c.doc r.doc)
+                            (set c.workflow r.workflow)
+                            (set c.inputs
+                                 (arazzo.workflow-inputs r.doc r.workflow)))
+                :group (let [(listed entries) (pcall commands.entries r.node
+                                                     load)]
+                         (when listed
+                           (set c.entries entries)))))))))
     c))
 
 (fn positional-entries [config positional context]
@@ -215,9 +236,9 @@ operation, or an Arazzo document's workflow and inputs."
           {:value op-name :help (?. context.ops op-name :summary)})
         (and (= cmd :az) (= n 1)) (icollect [_ a (ipairs (sorted-keys config.arazzo))]
                                    {:value a})
-        (and (= cmd :az) (= n 2))
-        (icollect [_ wf (ipairs (or (?. context :doc :workflows) []))]
-          {:value wf.workflowId :help wf.summary}) [])))
+        (and (= cmd :az) (>= n 2))
+        (icollect [_ e (ipairs (or context.entries []))]
+          {:value e.word :help e.summary}) [])))
 
 (fn input-entries [context positional current]
   "Workflow inputs as name= (those not given yet), or the values of the one
@@ -266,7 +287,7 @@ being typed (name=…)."
                             (table.insert offered
                                           {:value "--dry-run" :help o.help}))))
                       offered)
-                    (and (= cmd :az) (>= (length positional) 3))
+                    (and (= cmd :az) context.workflow)
                     (input-entries context positional current)
                     (positional-entries (or ctx.config {}) positional context))
         matching (icollect [_ e (ipairs entries)]

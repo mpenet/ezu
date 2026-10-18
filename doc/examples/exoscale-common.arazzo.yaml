@@ -1,0 +1,199 @@
+# Steps the Exoscale workflows share: waiting for an operation (a job) to
+# finish, and finding a resource's id given its name or id.
+arazzo: 1.1.0
+info:
+  title: Exoscale common steps
+  version: 1.0.0
+sourceDescriptions:
+  - name: exoscale
+    url: https://openapi-v2.exoscale.com/source.json
+    type: openapi
+workflows:
+  - workflowId: operation-wait
+    summary: Wait until an operation (a job) succeeds, and return what it acted on.
+    x-ezu-args: [id]
+    inputs:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+          description: Operation id
+    steps:
+      - stepId: poll
+        operationId: get-operation
+        parameters:
+          - name: id
+            in: path
+            value: $inputs.id
+        successCriteria:
+          - condition: $response.body#/state == 'success'
+        onFailure:
+          # still running: ask again in 2 seconds; a failed or timed out
+          # operation ends the workflow with an error
+          - name: pending
+            type: goto
+            stepId: poll
+            retryAfter: 2
+            criteria:
+              - condition: $response.body#/state == 'pending'
+        outputs:
+          reference: $response.body#/reference/id
+    outputs:
+      reference: $steps.poll.outputs.reference
+
+  - workflowId: instance-id
+    summary: The id of an instance, given its name or id.
+    x-ezu-args: [instance]
+    inputs:
+      type: object
+      required: [instance]
+      properties:
+        instance:
+          type: string
+          description: Instance name or id
+    steps:
+      - stepId: find
+        operationId: list-instances
+        successCriteria:
+          - condition: $statusCode == 200
+          - context: $response.body
+            type: jsonpath
+            condition: "$.instances[?@.name == '{$inputs.instance}' || @.id == '{$inputs.instance}']"
+        outputs:
+          id:
+            context: $response.body
+            type: jsonpath
+            selector: "$.instances[?@.name == '{$inputs.instance}' || @.id == '{$inputs.instance}'].id"
+    outputs:
+      id: $steps.find.outputs.id
+
+  - workflowId: security-group-id
+    summary: The id of a security group, given its name or id.
+    x-ezu-args: [security-group]
+    inputs:
+      type: object
+      required: [security-group]
+      properties:
+        security-group:
+          type: string
+          description: Security group name or id
+    steps:
+      - stepId: find
+        operationId: list-security-groups
+        successCriteria:
+          - condition: $statusCode == 200
+          - context: $response.body
+            type: jsonpath
+            condition: "$['security-groups'][?@.name == '{$inputs.security-group}' || @.id == '{$inputs.security-group}']"
+        outputs:
+          id:
+            context: $response.body
+            type: jsonpath
+            selector: "$['security-groups'][?@.name == '{$inputs.security-group}' || @.id == '{$inputs.security-group}'].id"
+    outputs:
+      id: $steps.find.outputs.id
+
+  - workflowId: elastic-ip-id
+    summary: The id of an elastic IP, given its address or id.
+    x-ezu-args: [elastic-ip]
+    inputs:
+      type: object
+      required: [elastic-ip]
+      properties:
+        elastic-ip:
+          type: string
+          description: Elastic IP address or id
+    steps:
+      - stepId: find
+        operationId: list-elastic-ips
+        successCriteria:
+          - condition: $statusCode == 200
+          - context: $response.body
+            type: jsonpath
+            condition: "$['elastic-ips'][?@.ip == '{$inputs.elastic-ip}' || @.id == '{$inputs.elastic-ip}']"
+        outputs:
+          id:
+            context: $response.body
+            type: jsonpath
+            selector: "$['elastic-ips'][?@.ip == '{$inputs.elastic-ip}' || @.id == '{$inputs.elastic-ip}'].id"
+    outputs:
+      id: $steps.find.outputs.id
+
+  - workflowId: private-network-id
+    summary: The id of a private network, given its name or id.
+    x-ezu-args: [private-network]
+    inputs:
+      type: object
+      required: [private-network]
+      properties:
+        private-network:
+          type: string
+          description: Private network name or id
+    steps:
+      - stepId: find
+        operationId: list-private-networks
+        successCriteria:
+          - condition: $statusCode == 200
+          - context: $response.body
+            type: jsonpath
+            condition: "$['private-networks'][?@.name == '{$inputs.private-network}' || @.id == '{$inputs.private-network}']"
+        outputs:
+          id:
+            context: $response.body
+            type: jsonpath
+            selector: "$['private-networks'][?@.name == '{$inputs.private-network}' || @.id == '{$inputs.private-network}'].id"
+    outputs:
+      id: $steps.find.outputs.id
+
+  - workflowId: anti-affinity-group-id
+    summary: The id of an anti-affinity group, given its name or id.
+    x-ezu-args: [anti-affinity-group]
+    inputs:
+      type: object
+      required: [anti-affinity-group]
+      properties:
+        anti-affinity-group:
+          type: string
+          description: Anti-affinity group name or id
+    steps:
+      - stepId: find
+        operationId: list-anti-affinity-groups
+        successCriteria:
+          - condition: $statusCode == 200
+          - context: $response.body
+            type: jsonpath
+            condition: "$['anti-affinity-groups'][?@.name == '{$inputs.anti-affinity-group}' || @.id == '{$inputs.anti-affinity-group}']"
+        outputs:
+          id:
+            context: $response.body
+            type: jsonpath
+            selector: "$['anti-affinity-groups'][?@.name == '{$inputs.anti-affinity-group}' || @.id == '{$inputs.anti-affinity-group}'].id"
+    outputs:
+      id: $steps.find.outputs.id
+
+  - workflowId: block-storage-id
+    summary: The id of a block storage volume, given its name or id.
+    x-ezu-args: [volume]
+    inputs:
+      type: object
+      required: [volume]
+      properties:
+        volume:
+          type: string
+          description: Volume name or id
+    steps:
+      - stepId: find
+        operationId: list-block-storage-volumes
+        successCriteria:
+          - condition: $statusCode == 200
+          - context: $response.body
+            type: jsonpath
+            condition: "$['block-storage-volumes'][?@.name == '{$inputs.volume}' || @.id == '{$inputs.volume}']"
+        outputs:
+          id:
+            context: $response.body
+            type: jsonpath
+            selector: "$['block-storage-volumes'][?@.name == '{$inputs.volume}' || @.id == '{$inputs.volume}'].id"
+    outputs:
+      id: $steps.find.outputs.id

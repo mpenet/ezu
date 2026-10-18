@@ -115,12 +115,57 @@ $ vm get-instance 0b6f3c2e
 
 ezu prints the command rather than running it: the name is yours to choose, and so is where the link goes. `vm completion fish` (or `bash`, `zsh`) gives the completion of the new command; `vm --help` lists its workflows. Under its own name, or a name nothing is configured for, ezu is itself.
 
-[`examples/exoscale-compute.arazzo.yaml`](examples/exoscale-compute.arazzo.yaml) makes Exoscale's `exo compute` commands such a command: instances and their snapshots, instance types, templates, SSH keys, security groups and their rules, elastic IPs, private networks, anti-affinity groups, deploy targets and block storage. Its workflows take resources by name or id, wait for each job to finish and show the result; shared steps (finding an id by name, waiting for a job) are workflows the others run.
+### Command words
+
+`x-ezu-command`, an ezu extension, gives a workflow the words that run it, so a document reads as a command line tool rather than a list of workflow ids:
+
+```yaml
+workflows:
+  - workflowId: instance-snapshot-create
+    x-ezu-command: instance snapshot create
+    x-ezu-args: [instance]
+```
 
 ```sh
-exo-compute instance-create web1 size=large ssh-key=me labels.env=prod
-exo-compute security-group-rule-add web port=443
-exo-compute instance-stop web1 --server.zone=de-fra-1
+vm instance snapshot create web1      # or ezu az vm instance snapshot create web1
+```
+
+On an Arazzo source, `x-ezu-command` mounts that document's commands under its words. A document of sources alone makes one command of several documents, each read only when a command line reaches it:
+
+```yaml
+# exoscale.arazzo.yaml, named exo in the configuration
+sourceDescriptions:
+  - {name: exoscale, url: https://openapi-v2.exoscale.com/source.json, type: openapi}
+  - {name: compute, url: exoscale-compute.arazzo.yaml, type: arazzo, x-ezu-command: compute}
+workflows:
+  - workflowId: zone-list
+    x-ezu-command: zone list
+    ...
+```
+
+```console
+$ exo
+compute  Instances, security groups, elastic IPs, private networks, block storage…
+zone     list
+$ exo compute instance snapshot
+create  Snapshot an instance's disk.
+delete  Delete an instance snapshot.
+export  Export an instance snapshot, and show where to download it.
+list    List instance snapshots.
+revert  Revert an instance to one of its snapshots; the instance must be stopped.
+show    Show an instance snapshot.
+$ exo compute instance snapshot create web1
+```
+
+A command line's words go down the tree until they reach a workflow; the arguments after it are its inputs (`name=value`) and positional values. A group lists what is under it, a word that names nothing stops with a suggestion (`no command 'instanse' in exo compute; did you mean instance?`), and `--help` after a workflow's words describes it. Completion offers the words, then the workflow's inputs. Workflows without words (shared steps, say) stay out of the listings, and their id still runs them, as in a document without any words: `exo zone-list`. Mounted documents are loaded as [Arazzo sources](#workflows-of-other-documents) are, next to the document unless sources are trusted. `--check` checks the words (a command given twice, or both a command and a group of commands) and the mounted documents.
+
+[`examples/exoscale.arazzo.yaml`](examples/exoscale.arazzo.yaml) makes Exoscale's `exo` command line such a command, with [command words](#command-words). It mounts [`exoscale-compute.arazzo.yaml`](examples/exoscale-compute.arazzo.yaml) as `exo compute`: instances and their snapshots, instance types, templates, SSH keys, security groups and their rules, elastic IPs, private networks, anti-affinity groups, deploy targets and block storage. Its workflows take resources by name or id, wait for each job to finish and show the result; the steps they share (finding an id by name, waiting for a job) are workflows of [`exoscale-common.arazzo.yaml`](examples/exoscale-common.arazzo.yaml).
+
+```sh
+exo compute instance create web1 size=large ssh-key=me labels.env=prod
+exo compute security-group rule add web port=443
+exo compute instance stop web1 --server.zone=de-fra-1
+exo zone list
 ```
 
 ## Checking a document

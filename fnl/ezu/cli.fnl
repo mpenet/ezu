@@ -4,6 +4,7 @@
 (local arazzo (require :ezu.arazzo))
 (local arazzo-expr (require :ezu.arazzo.expr))
 (local arazzo-check (require :ezu.arazzo.check))
+(local commands (require :ezu.arazzo.commands))
 (local auth (require :ezu.auth))
 (local cli-help (require :ezu.cli.help))
 (local http-mod (require :ezu.http))
@@ -31,7 +32,6 @@
         : exit-status
         : format-servers
         : print-arazzo-result
-        : list-arazzo-workflows
         : wrap-log-request
         : strip-location
         : check-select
@@ -265,17 +265,17 @@ name can't pass for a positional value."
                                 (table.concat slots ", ") a)))))
     fields))
 
-(fn workflow-inputs [p named doc wf]
+(fn workflow-inputs [p named doc wf args]
   "Inputs for a run, lowest priority first: the context's configured inputs,
---inputs, then the arguments after the workflow id, typed by the workflow's
-inputs schema."
+--inputs, then args, the arguments after the workflow's words, typed by the
+workflow's inputs schema."
   (let [schema (arazzo.workflow-inputs doc wf)
         base (collect [k v (pairs (or (?. named :inputs) {}))]
                k
                v)]
     (each [k v (pairs (object-option "--inputs" p.arazzo-inputs-blob))]
       (tset base k v))
-    (build-body (workflow-arguments wf schema p.path-params) schema base)))
+    (build-body (workflow-arguments wf schema args) schema base)))
 
 (fn check-inputs [doc wf inputs p]
   "Stop when inputs don't match the workflow's inputs schema, unless --no-validate."
@@ -307,6 +307,11 @@ another origin); files directly."
                                     client-opts.authorize)})
         (ezu.load-schema location opts))))
 
+(fn trust-sources? [named p]
+  "Whether Arazzo sources load from anywhere: --trust-sources, or trust-sources
+in the document's configuration."
+  (or (= true p.trust-sources) (= true (?. named :trust-sources))))
+
 (fn run-options [{: profile-name : profile : named} p env]
   "The options of a workflow run with the context's profile: its clients'
 options, and how to load its sources. Arazzo sources are loaded from anywhere
@@ -319,8 +324,7 @@ with --trust-sources, or trust-sources in the document's configuration."
         run-opts (client-options profile-name profile p env.config
                                  env.transport)]
     (set run-opts.load-schema (source-schema-loader env run-opts verbose))
-    (set run-opts.trust-sources
-         (or (= true p.trust-sources) (= true (?. named :trust-sources))))
+    (set run-opts.trust-sources (trust-sources? named p))
     ;; each OpenAPI source is built once, whichever documents use it
     (set run-opts.source-clients {})
     run-opts))
@@ -344,8 +348,8 @@ built on first use."
                   (set clients (arazzo.build-clients doc run-opts file)))
                 (arazzo.run-workflow doc wf.workflowId inputs clients run-opts))))))
 
-(fn check-document [{: doc : file &as context} p env]
-  "Print what is wrong in the document, or in workflow p.operation, found
+(fn check-document [{: doc : file &as context} p env ?workflow-id]
+  "Print what is wrong in the document, or in workflow ?workflow-id, found
 without running it; exit 1 when something is."
   (let [opts (run-options context p env)
         clients (let [(ok c) (pcall arazzo.build-clients doc opts file)]
@@ -357,12 +361,14 @@ without running it; exit 1 when something is."
                             (#(each [_ n (ipairs (or opts.auth-header-names []))]
                                 (tset $ (n:lower) true))))
                   :query (or opts.implied-query {})}
-        prefix (.. (or p.operation "") " ›")
-        problems (icollect [_ problem (ipairs (arazzo-check.check doc clients
-                                                                  supplied opts))]
-                   (when (or (not p.operation) (= problem.where p.operation)
+        prefix (.. (or ?workflow-id "") " ›")
+        (found checked) (arazzo-check.check doc clients supplied opts)
+        problems (icollect [_ problem (ipairs found)]
+                   (when (or (not ?workflow-id) (= problem.where ?workflow-id)
                              (= (problem.where:sub 1 (length prefix)) prefix))
                      problem))
+        ;; one workflow, or all those of the documents checked
+        documents (if ?workflow-id [doc] checked)
         count-of #(accumulate [n 0 _ problem (ipairs problems)]
                     (if (= problem.level $) (+ n 1) n))
         errors (count-of :error)
@@ -373,11 +379,16 @@ without running it; exit 1 when something is."
                                  problem.where ": " problem.message))))
     (print (if (next problems)
                (.. (plural errors :error) ", " (plural warnings :warning))
-               (let [workflows (icollect [_ wf (ipairs (or doc.workflows []))]
-                                 (when (or (not p.operation)
-                                           (= wf.workflowId p.operation))
-                                   wf))]
-                 (.. "✓ " (plural (length workflows) :workflow) ", "
+               (let [workflows []]
+                 (each [_ d (ipairs documents)]
+                   (each [_ wf (ipairs (or d.workflows []))]
+                     (when (or (not ?workflow-id)
+                               (= wf.workflowId ?workflow-id))
+                       (table.insert workflows wf))))
+                 (.. "✓ " (if (> (length documents) 1)
+                                (.. (plural (length documents) :document) ", ")
+                                "")
+                     (plural (length workflows) :workflow) ", "
                      (plural (accumulate [n 0 _ wf (ipairs workflows)]
                                (+ n (length (or wf.steps []))))
                              :step) ": nothing wrong found"))))
@@ -427,6 +438,32 @@ context's."
                               :timeout (request-timeout profile p env.config)})]
     {: named : file : doc : profile-name : profile}))
 
+(fn source-loader [context p env]
+  "(load doc source): the Arazzo document a source of doc names, loaded once,
+next to doc unless sources are trusted."
+  (let [loaded {}
+        opts {:trust-sources (trust-sources? context.named p)}
+        load-opts {:ssl (merge-ssl context.profile p.ssl)
+                   :timeout (request-timeout context.profile p env.config)}]
+    (fn [doc source]
+      (let [url (arazzo.source-url doc source.name opts)]
+        (when (not (. loaded url))
+          (tset loaded url (arazzo.load-doc url load-opts)))
+        (. loaded url)))))
+
+(fn list-commands [node load]
+  "Print the commands under node, with what they do."
+  (let [entries (commands.entries node load)
+        width (accumulate [w 0 _ e (ipairs entries)]
+                (math.max w (length e.word)))]
+    (when (= 0 (length entries))
+      (print "(no workflows)"))
+    (each [_ e (ipairs entries)]
+      (print (util.printable (if (and e.summary (not= e.summary ""))
+                                 (string.format (.. "%-" width "s  %s") e.word
+                                                (tostring e.summary))
+                                 e.word))))))
+
 (fn run-arazzo [p env]
   ;; p.schema = name-or-file, p.operation = workflow-id, p.path-params = extra positionals
   (when (or p.dry-run p.curl)
@@ -445,16 +482,46 @@ context's."
           (exit 0))
         (die "--link needs a document named in the configuration's arazzo section: that name is the command's")))
   (let [{: named : doc &as context} (arazzo-context p.schema p.profile p env)
-        wf (when p.operation (arazzo.find-workflow doc p.operation))]
-    (if (and p.operation (not wf)) (die (.. "Unknown workflow: " p.operation))
-        p.check (check-document context p env) (not p.operation)
-        (list-arazzo-workflows doc) p.help
+        words (doto (if p.operation [p.operation] [])
+                (#(each [_ a (ipairs (or p.path-params []))]
+                    (table.insert $ a))))
+        load (source-loader context p env)
+        (ok target) (pcall commands.resolve doc words load)
+        _ (when (not ok) (die (tostring target)))
+        here (table.concat (doto [(or env.command (.. "ezu az " p.schema))]
+                             (#(each [_ w (ipairs target.path)]
+                                 (table.insert $ w))))
+                           " ")
+        ;; the document the words lead to, a mounted one maybe
+        target-doc (or target.doc target.node.doc)
+        context (doto (collect [k v (pairs context)] k v)
+                  (tset :doc target-doc)
+                  (tset :file (or (arazzo.location target-doc) context.file)))
+        wf target.workflow]
+    (if (= target.kind :unknown)
+        (die (if (commands.commands? target-doc)
+                 (.. "no command '" target.word "' in " here
+                     (if target.suggestion
+                         (.. "; did you mean " target.suggestion "?")
+                         ""))
+                 (let [guess (util.closest target.word
+                                           (icollect [_ w (ipairs (or target-doc.workflows
+                                                                      []))]
+                                             w.workflowId))]
+                   (.. "Unknown workflow: " target.word
+                       (if guess (.. "; did you mean " guess "?") "")))))
+        p.check
+        (check-document context p env (?. wf :workflowId))
+        (= target.kind :group)
+        (list-commands target.node load)
+        p.help
         (print (util.printable (cli-help.build-workflow wf
-                                                        (arazzo.workflow-inputs doc
+                                                        (arazzo.workflow-inputs target-doc
                                                                                 wf)
-                                                        (arazzo.positional-inputs wf))))
-        (let [inputs (workflow-inputs p named doc wf)]
-          (check-inputs doc wf inputs p)
+                                                        (arazzo.positional-inputs wf)
+                                                        here)))
+        (let [inputs (workflow-inputs p named target-doc wf target.rest)]
+          (check-inputs target-doc wf inputs p)
           (execute-workflow context wf inputs p env)))))
 
 ;; ---- op ----

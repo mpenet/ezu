@@ -1,6 +1,7 @@
 ;; ABOUTME: Checks an Arazzo document without running it: what steps call, their
 ;; ABOUTME: parameters and bodies, references, conditions and actions.
 (local arazzo (require :ezu.arazzo))
+(local commands (require :ezu.arazzo.commands))
 (local expr (require :ezu.arazzo.expr))
 (local iregexp (require :ezu.iregexp))
 (local jsonpath (require :ezu.jsonpath))
@@ -427,6 +428,15 @@ data holding them."
             (do
               (tset seen wf.workflowId true)
               (check-workflow wf)))))
+    (each [_ problem (ipairs (commands.problems doc))]
+      (report :error problem.where problem.message))
+    ;; the documents sources mount as commands are checked too
+    (each [_ src (ipairs (if (list-of-tables? doc.sourceDescriptions)
+                             doc.sourceDescriptions
+                             []))]
+      (when (and (= src.type :arazzo) (= (type src.name) :string)
+                 (not= nil (. src :x-ezu-command)))
+        (other-document (.. "source " src.name) src.name)))
     (values problems externals)))
 
 (fn check [doc clients ?supplied ?opts]
@@ -434,12 +444,15 @@ data holding them."
 without running it: [{:level :error|:warning :where :message}]. ?supplied:
 {:header {name true} :query {name true}}, the parameters every request gets
 anyway (from a profile), header names lowercased. ?opts are the run's options,
-to load the Arazzo documents doc's workflows come from (trust-sources, ssl…):
-their problems are reported too, each where starting with the source's name."
+to load the Arazzo documents doc's workflows come from or its sources mount
+(trust-sources, ssl…): their problems are reported too, each where starting
+with the source's name. The documents checked, doc first, come second."
   (let [opts (or ?opts {})
         problems []
+        checked []
         visited {}]
     (fn visit [d c prefix]
+      (table.insert checked d)
       (let [(found externals) (checker d c (or ?supplied {}) opts)]
         (each [_ p (ipairs found)]
           (when prefix
@@ -454,6 +467,6 @@ their problems are reported too, each where starting with the source's name."
     (match (arazzo.location doc)
       url (tset visited url true))
     (visit doc clients nil)
-    problems))
+    (values problems checked)))
 
 {: check}

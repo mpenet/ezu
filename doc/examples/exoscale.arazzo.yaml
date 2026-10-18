@@ -1,0 +1,45 @@
+# Exoscale's exo command line, as Arazzo workflows: each document below is
+# mounted under its words, and read only when a command line reaches it.
+#
+# Name it in ezu's configuration, with a profile for Exoscale:
+#
+#   "arazzo": {"exo": {"file": ".../exoscale.arazzo.yaml", "profile": "exo"}}
+#
+# then make it a command (`ezu az exo --link` prints how):
+#
+#   exo compute instance list
+#   exo compute instance create web1 template="Linux Ubuntu 24.04 LTS 64-bit" \
+#     size=medium ssh-key=me labels.env=prod
+#   exo compute instance stop web1
+#   exo compute security-group rule add web port=443
+#   exo compute instance list --server.zone=de-fra-1
+#   exo zone list
+#
+# Where exo takes a resource as NAME|ID, so do these workflows; the zone is
+# the API's server variable (--server.zone, or "server" in the profile).
+arazzo: 1.1.0
+info:
+  title: Exoscale
+  summary: The exo command line, as workflows over the Exoscale API.
+  version: 1.0.0
+sourceDescriptions:
+  - name: exoscale
+    url: https://openapi-v2.exoscale.com/source.json
+    type: openapi
+  - name: compute
+    url: exoscale-compute.arazzo.yaml
+    type: arazzo
+    x-ezu-command: compute
+workflows:
+  - workflowId: zone-list
+    x-ezu-command: zone list
+    summary: List the zones.
+    steps:
+      - stepId: list
+        operationId: list-zones
+        successCriteria:
+          - condition: $statusCode == 200
+        outputs:
+          zones: $response.body#/zones
+    outputs:
+      zones: $steps.list.outputs.zones

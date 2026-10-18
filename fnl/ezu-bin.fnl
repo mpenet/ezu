@@ -61,6 +61,8 @@
 
 (require :ezu.arazzo)
 
+(require :ezu.arazzo.commands)
+
 (require :ezu.arazzo.check)
 
 (require :ezu.cli.request)

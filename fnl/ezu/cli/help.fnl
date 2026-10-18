@@ -32,9 +32,10 @@
                                step.operationPath))
       "?"))
 
-(fn build-workflow [wf inputs-schema positional]
+(fn build-workflow [wf inputs-schema positional ?command]
   "Help text for an Arazzo workflow. inputs-schema is the workflow's resolved
-inputs JSON Schema; positional lists inputs that may be passed positionally."
+inputs JSON Schema; positional lists inputs that may be passed positionally;
+?command is the command line running it (ezu az NAME WORKFLOW by default)."
   (let [lines []
         add #(table.insert lines $)
         required (collect [_ r (ipairs (util.required-names inputs-schema))]
@@ -50,7 +51,8 @@ inputs JSON Schema; positional lists inputs that may be passed positionally."
     (when (and wf.description (not= wf.description "")
                (not= wf.description wf.summary))
       (add wf.description))
-    (add (.. "\nUsage: ezu az <name-or-file> " wf.workflowId
+    (add (.. "\nUsage: "
+             (or ?command (.. "ezu az <name-or-file> " wf.workflowId))
              (table.concat (icollect [_ n (ipairs positional)] (.. " <" n ">")))
              " [name=value ...]"))
     (if (= 0 (length names))

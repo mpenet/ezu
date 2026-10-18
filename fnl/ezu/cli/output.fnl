@@ -705,21 +705,6 @@ variable shows the value in effect."
           (print "--- outputs ---")
           (print (render result.outputs)))))))
 
-(fn list-arazzo-workflows [doc]
-  (let [wfs (or doc.workflows [])]
-    (when (= (length wfs) 0)
-      (print "(no workflows)"))
-    (let [ids (icollect [_ wf (ipairs wfs)]
-                (tostring (or wf.workflowId "(no workflowId)")))
-          width (accumulate [w 0 _ id (ipairs ids)]
-                  (math.max w (length id)))]
-      (each [i wf (ipairs wfs)]
-        (print (util.printable (if wf.summary
-                                   (string.format (.. "%-" width "s  %s")
-                                                  (. ids i)
-                                                  (tostring wf.summary))
-                                   (. ids i))))))))
-
 {: redact-header
  : wrap-log-request
  : wrap-log-timing
@@ -746,6 +731,5 @@ variable shows the value in effect."
  : show-value
  : format-servers
  : print-arazzo-result
- : list-arazzo-workflows
  : stream-printer
  : exit?}

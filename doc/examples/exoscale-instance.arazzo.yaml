@@ -50,9 +50,12 @@ workflows:
             value: public
         successCriteria:
           - condition: $statusCode == 200
-          # the name must be one of the templates
+          # the name must be one of the templates, and only one
           - context: $response.body
             condition: "$.templates[?@.name == '{$inputs.template}']"
+            type: jsonpath
+          - context: $response.body
+            condition: "$[?count(@[?@.name == '{$inputs.template}']) == 1]"
             type: jsonpath
         outputs:
           id:

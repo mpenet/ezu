@@ -114,40 +114,67 @@ declares; records the variables it used in used."
         (tset client-opts :source-url url)
         (ezu.client schema client-opts))))
 
+(fn openapi-sources [doc]
+  "doc's OpenAPI sources: its type is optional, and anything but arazzo and
+asyncapi is one."
+  (icollect [_ src (ipairs (or doc.sourceDescriptions []))]
+    (when (and (not= src.type :arazzo) (not= src.type :asyncapi))
+      src)))
+
+(fn arazzo-sources? [doc]
+  (accumulate [found false _ src (ipairs (or doc.sourceDescriptions []))
+               &until found]
+    (= src.type :arazzo)))
+
 (fn build-clients [doc ?opts ?location]
   "Returns {sourceName → ezu-client} for openapi sourceDescriptions.
 Relative source URLs resolve against ?location, the document's own path or URL.
 ?opts.source-clients, when given, keeps the clients built by URL so that each
-is built once; with ?opts.server-vars-elsewhere, server variables no source of
-doc declares are left to other documents."
+is built once. ?opts.base-url and server-index apply to doc's one source, or
+with ?opts.api-url to the sources at that URL only. Server variables no source
+declares are refused, unless doc runs workflows of other documents (then the
+run checks them against all) or ?opts.server-vars-elsewhere."
   (let [clients {}
         base (base-uri doc ?location)
-        sources (icollect [_ src (ipairs (or doc.sourceDescriptions []))]
-                  ;; type is optional: anything but arazzo and asyncapi is an
-                  ;; OpenAPI source
-                  (when (and (not= src.type :arazzo) (not= src.type :asyncapi))
-                    src))]
-    (when (and (?. ?opts :base-url) (> (length sources) 1))
+        sources (openapi-sources doc)
+        opts (or ?opts {})
+        url-of #(if base (util.resolve-reference base $.url) $.url)
+        overridden (icollect [_ src (ipairs sources)]
+                     (when (or (= nil opts.api-url)
+                               (= opts.api-url (url-of src)))
+                       src))]
+    (when (and opts.base-url (> (length overridden) 1))
       (error (.. "base-url override is ambiguous: the document has "
-                 (length sources) " openapi sources") 0))
-    (when (and (?. ?opts :server-index) (> (length sources) 1))
+                 (length overridden) " openapi sources") 0))
+    (when (and opts.server-index (> (length overridden) 1))
       (error (.. "server-index is ambiguous: the document has "
-                 (length sources) " openapi sources") 0))
-    (let [server-vars (or (?. ?opts :server-vars) {})
-          used {}]
+                 (length overridden) " openapi sources") 0))
+    (let [server-vars (or opts.server-vars {})
+          used {} ;; base-url and server-index are for one API: the others' own
+          ;; servers stay
+          plain (doto (collect [k v (pairs opts)] k v)
+                  (tset :base-url nil)
+                  (tset :server-index nil))]
       (each [_ src (ipairs sources)]
-        (let [url (if base (util.resolve-reference base src.url) src.url)
-              cache (?. ?opts :source-clients)
-              (ok c) (if (and cache (. cache url)) (values true (. cache url))
-                         (pcall source-client url (or ?opts {}) server-vars
-                                used))]
+        (let [url (url-of src)
+              cache opts.source-clients
+              src-opts (if (or (= nil opts.api-url) (= opts.api-url url)) opts
+                           plain)
+              (ok c) (if (and cache (. cache url))
+                         (values true (. cache url))
+                         (let [own-used {}
+                               (ok client) (pcall source-client url src-opts
+                                                  server-vars own-used)]
+                           (values ok (if ok {: client :used own-used} client))))]
           (when (not ok)
             (error (.. "source '" src.name "': " (tostring c)) 0))
+          (each [name (pairs c.used)]
+            (tset used name true))
           (when cache
             (tset cache url c))
-          (tset clients src.name c)))
-      ;; an index of other documents leaves its variables to them
-      (when (not (or (?. ?opts :server-vars-elsewhere) (= 0 (length sources))))
+          (tset clients src.name c.client)))
+      (when (not (or opts.server-vars-elsewhere (= 0 (length sources))
+                     (arazzo-sources? doc)))
         (each [name (pairs server-vars)]
           (when (not (. used name))
             (error (.. "no openapi source declares server variable '" name "'")
@@ -710,6 +737,42 @@ among local files, or on doc's origin, $self included."
                       "); it is only loaded with trust-sources")))
       url)))
 
+(fn check-server-variables [doc opts]
+  "Raise for a server variable that no OpenAPI source of doc, or of the
+documents its workflows can reach through Arazzo sources, declares. Sources
+that can't be read are left to the steps that use them."
+  (let [declared {}
+        seen {}
+        queue [doc]]
+    (while (next queue)
+      (let [d (table.remove queue 1)
+            base (base-uri d)]
+        (each [_ src (ipairs (openapi-sources d))]
+          (let [url (if base (util.resolve-reference base src.url) src.url)]
+            (when (not (. seen url))
+              (tset seen url true)
+              (let [(ok schema) (pcall (or opts.load-schema ezu.load-schema)
+                                       url
+                                       {:ssl opts.ssl
+                                        :headers opts.headers
+                                        :timeout opts.timeout})]
+                (when ok
+                  (each [name (pairs (declared-server-variables schema
+                                                                (or opts.server-index
+                                                                    1)))]
+                    (tset declared name true)))))))
+        (each [_ src (ipairs (or d.sourceDescriptions []))]
+          (when (= src.type :arazzo)
+            (let [(ok url) (pcall source-url d src.name opts)]
+              (when (and ok (not (. seen url)))
+                (tset seen url true)
+                (let [(loaded sub) (pcall load-doc url opts)]
+                  (when loaded
+                    (table.insert queue sub)))))))))
+    (each [name (pairs (or opts.server-vars {}))]
+      (when (not (. declared name))
+        (error (.. "no openapi source declares server variable '" name "'") 0)))))
+
 (fn arazzo-source [doc source-name opts]
   "{:doc :clients :url} of the Arazzo document doc's source source-name, loaded
 once per run (opts.arazzo-documents, by URL); see source-url."
@@ -743,6 +806,16 @@ once per run (opts.arazzo-documents, by URL); see source-url."
         opts (enter-workflow (workflow-key doc workflow-id) label ?opts)
         ;; documents and clients are shared by the workflows the run runs
         _ (when (not opts.arazzo-documents)
+            ;; the run starts here: base-url and server-index are for this
+            ;; document's API
+            (when (or opts.base-url opts.server-index)
+              (match (openapi-sources doc)
+                [src nil] (set opts.api-url
+                               (let [base (base-uri doc)]
+                                 (if base (util.resolve-reference base src.url)
+                                     src.url)))))
+            (when (and (next (or opts.server-vars {})) (arazzo-sources? doc))
+              (check-server-variables doc opts))
             (set opts.arazzo-documents {})
             (match (location doc)
               url (tset opts.arazzo-documents url {: doc : clients : url})))

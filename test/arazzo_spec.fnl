@@ -146,6 +146,21 @@
                                                       {}
                                                       "test/fixtures/flow.arazzo.json")]
                     (assert.is_not_nil clients.api))))
+            (it "builds the same sources again from its cache"
+                (fn []
+                  (let [path (os.tmpname)]
+                    (with-open [f (io.open path :w)]
+                      (f:write "{\"openapi\":\"3.0.0\",\"info\":{},\"servers\":[{\"url\":\"https://{zone}.a.test\",\"variables\":{\"zone\":{\"default\":\"z1\"}}}],\"paths\":{\"/x\":{\"get\":{\"operationId\":\"ax\",\"responses\":{}}}}}"))
+                    (let [doc {:sourceDescriptions [{:name "a"
+                                                     :type "openapi"
+                                                     :url path}]
+                               :workflows []}
+                          opts {:server-vars {:zone "z9"} :source-clients {}}
+                          first (arazzo.build-clients doc opts)
+                          (ok again) (pcall arazzo.build-clients doc opts)]
+                      (os.remove path)
+                      (assert.is_true ok again)
+                      (assert.are.equal first.a again.a)))))
             (it "rejects server variables no source declares"
                 (fn []
                   (let [doc {:sourceDescriptions [{:name "a"
@@ -1954,6 +1969,78 @@ and record their requests in the returned list."
                                            1 true)))
                     (assert.is_true ok result)
                     (assert.are.equal 1 result.outputs.r))))
+            (it "takes server variables any document's sources declare, and only those"
+                (fn []
+                  (let [own {:openapi "3.0.0"
+                             :info {:title "o" :version "1"}
+                             :servers [{:url "https://own.test"}]
+                             :paths {:/o {:get {:operationId "getO"
+                                                :responses {}}}}}
+                        doc (arazzo-doc [{:name "own"
+                                          :url "own.json"
+                                          :type "openapi"}
+                                         {:name "common"
+                                          :url "lib/common.json"
+                                          :type "arazzo"}]
+                                        [{:workflowId "w"
+                                          :steps [{:stepId "s"
+                                                   :workflowId "$sourceDescriptions.common.fetch"}]
+                                          :outputs {:v "$steps.s.outputs.v"}}])
+                        files {:main.json doc
+                               :own.json own
+                               :lib/common.json echo-doc
+                               :lib/api.json api}
+                        urls []
+                        http-fn (fn [req]
+                                  (table.insert urls req.url)
+                                  (ok-resp {:v 7}))
+                        (ok result) (run-in (tmp-dir files) "w" {}
+                                            {:server-vars {:zone "z9"}
+                                             : http-fn})
+                        (ok2 err2) (run-in (tmp-dir files) "w" {}
+                                           {:server-vars {:zoen "z9"}
+                                            : http-fn})]
+                    (assert.is_true ok result)
+                    (assert.are.same ["https://z9.api.test/x"] urls)
+                    (assert.is_false ok2)
+                    (assert.is_truthy (: (tostring err2) :find
+                                         "no openapi source declares server variable 'zoen'"
+                                         1 true)
+                                      (tostring err2))
+                    (assert.are.equal 1 (length urls)))))
+            (it "applies base-url to the first document's API only"
+                (fn []
+                  (let [own {:openapi "3.0.0"
+                             :info {:title "o" :version "1"}
+                             :servers [{:url "https://own.test"}]
+                             :paths {:/o {:get {:operationId "getO"
+                                                :responses {}}}}}
+                        doc (arazzo-doc [{:name "own"
+                                          :url "own.json"
+                                          :type "openapi"}
+                                         {:name "common"
+                                          :url "lib/common.json"
+                                          :type "arazzo"}]
+                                        [{:workflowId "w"
+                                          :steps [{:stepId "o"
+                                                   :operationId "getO"}
+                                                  {:stepId "s"
+                                                   :workflowId "$sourceDescriptions.common.fetch"}]}])
+                        urls []
+                        (ok result) (run-in (tmp-dir {:main.json doc
+                                                      :own.json own
+                                                      :lib/common.json echo-doc
+                                                      :lib/api.json api})
+                                            "w" {}
+                                            {:base-url "http://localhost:9999"
+                                             :http-fn (fn [req]
+                                                        (table.insert urls
+                                                                      req.url)
+                                                        (ok-resp {:v 7}))})]
+                    (assert.is_true ok result)
+                    (assert.are.same ["http://localhost:9999/o"
+                                      "https://z1.api.test/x"]
+                                     urls))))
             (it "says where a source refused through $self resolves"
                 (fn []
                   (let [elsewhere (doto (arazzo-doc main-doc.sourceDescriptions

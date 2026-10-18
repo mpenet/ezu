@@ -35,6 +35,10 @@ workflows:
           - context: $response.body
             type: jsonpath
             condition: "$.vpcs[?@.name == '{$inputs.vpc}' || @.id == '{$inputs.vpc}']"
+          # one only: a name that several share is ambiguous
+          - context: $response.body
+            type: jsonpath
+            condition: "$[?count(@[?@.name == '{$inputs.vpc}' || @.id == '{$inputs.vpc}']) == 1]"
         outputs:
           id:
             context: $response.body
@@ -68,6 +72,10 @@ workflows:
           - context: $response.body
             type: jsonpath
             condition: "$.subnets[?@.name == '{$inputs.subnet}' || @.id == '{$inputs.subnet}']"
+          # one only: a name that several share is ambiguous
+          - context: $response.body
+            type: jsonpath
+            condition: "$[?count(@[?@.name == '{$inputs.subnet}' || @.id == '{$inputs.subnet}']) == 1]"
         outputs:
           id:
             context: $response.body

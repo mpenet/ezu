@@ -51,6 +51,10 @@ workflows:
           - context: $response.body
             type: jsonpath
             condition: "$['iam-roles'][?@.name == '{$inputs.role}' || @.id == '{$inputs.role}']"
+          # one only: a name that several share is ambiguous
+          - context: $response.body
+            type: jsonpath
+            condition: "$[?count(@[?@.name == '{$inputs.role}' || @.id == '{$inputs.role}']) == 1]"
         outputs:
           id:
             context: $response.body
@@ -103,6 +107,10 @@ workflows:
           - context: $response.body
             type: jsonpath
             condition: "$.users[?@.email == '{$inputs.user}' || @.id == '{$inputs.user}']"
+          # one only: a name that several share is ambiguous
+          - context: $response.body
+            type: jsonpath
+            condition: "$[?count(@[?@.email == '{$inputs.user}' || @.id == '{$inputs.user}']) == 1]"
         outputs:
           id:
             context: $response.body

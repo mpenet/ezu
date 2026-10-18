@@ -5575,6 +5575,10 @@ workflows:
           - context: $response.body
             type: jsonpath
             condition: "$['dbaas-endpoints'][?@.name == '{$inputs.endpoint}' || @.id == '{$inputs.endpoint}']"
+          # one only: a name that several share is ambiguous
+          - context: $response.body
+            type: jsonpath
+            condition: "$[?count(@[?@.name == '{$inputs.endpoint}' || @.id == '{$inputs.endpoint}']) == 1]"
         outputs:
           id:
             context: $response.body

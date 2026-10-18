@@ -127,6 +127,10 @@ workflows:
           - context: $response.body
             type: jsonpath
             condition: "$.templates[?@.name == '{$inputs.template}' || @.id == '{$inputs.template}']"
+          # one only: a name that several share is ambiguous
+          - context: $response.body
+            type: jsonpath
+            condition: "$[?count(@[?@.name == '{$inputs.template}' || @.id == '{$inputs.template}']) == 1]"
         outputs:
           id:
             context: $response.body
@@ -479,6 +483,10 @@ workflows:
           - context: $response.body
             type: jsonpath
             condition: "$.templates[?@.name == '{$inputs.template}' || @.id == '{$inputs.template}']"
+          # one only: a name that several share is ambiguous
+          - context: $response.body
+            type: jsonpath
+            condition: "$[?count(@[?@.name == '{$inputs.template}' || @.id == '{$inputs.template}']) == 1]"
         outputs:
           id:
             context: $response.body
@@ -1711,6 +1719,10 @@ workflows:
           - context: $response.body
             type: jsonpath
             condition: "$.templates[?@.name == '{$inputs.template}' || @.id == '{$inputs.template}']"
+          # one only: a name that several share is ambiguous
+          - context: $response.body
+            type: jsonpath
+            condition: "$[?count(@[?@.name == '{$inputs.template}' || @.id == '{$inputs.template}']) == 1]"
         outputs:
           template:
             context: $response.body
@@ -1954,6 +1966,10 @@ workflows:
           - context: $response.body
             type: jsonpath
             condition: "$.templates[?@.name == '{$inputs.template}' || @.id == '{$inputs.template}']"
+          # one only: a name that several share is ambiguous
+          - context: $response.body
+            type: jsonpath
+            condition: "$[?count(@[?@.name == '{$inputs.template}' || @.id == '{$inputs.template}']) == 1]"
         outputs:
           id:
             context: $response.body
@@ -3183,6 +3199,10 @@ workflows:
           - context: $response.body
             type: jsonpath
             condition: "$['deploy-targets'][?@.name == '{$inputs.deploy-target}' || @.id == '{$inputs.deploy-target}']"
+          # one only: a name that several share is ambiguous
+          - context: $response.body
+            type: jsonpath
+            condition: "$[?count(@[?@.name == '{$inputs.deploy-target}' || @.id == '{$inputs.deploy-target}']) == 1]"
         outputs:
           id:
             context: $response.body
@@ -3693,6 +3713,10 @@ workflows:
           - context: $response.body
             type: jsonpath
             condition: "$['block-storage-snapshots'][?@.name == '{$inputs.snapshot}' || @.id == '{$inputs.snapshot}']"
+          # one only: a name that several share is ambiguous
+          - context: $response.body
+            type: jsonpath
+            condition: "$[?count(@[?@.name == '{$inputs.snapshot}' || @.id == '{$inputs.snapshot}']) == 1]"
         outputs:
           id:
             context: $response.body
@@ -3836,6 +3860,10 @@ workflows:
           - context: $response.body
             type: jsonpath
             condition: "$.templates[?@.name == '{$inputs.template}' || @.id == '{$inputs.template}']"
+          # one only: a name that several share is ambiguous
+          - context: $response.body
+            type: jsonpath
+            condition: "$[?count(@[?@.name == '{$inputs.template}' || @.id == '{$inputs.template}']) == 1]"
         outputs:
           id:
             context: $response.body
@@ -4222,6 +4250,10 @@ workflows:
           - context: $response.body
             type: jsonpath
             condition: "$.templates[?@.name == '{$inputs.template}' || @.id == '{$inputs.template}']"
+          # one only: a name that several share is ambiguous
+          - context: $response.body
+            type: jsonpath
+            condition: "$[?count(@[?@.name == '{$inputs.template}' || @.id == '{$inputs.template}']) == 1]"
         outputs:
           id:
             context: $response.body
@@ -4628,6 +4660,10 @@ workflows:
           - context: $response.body
             type: jsonpath
             condition: "$['instance-pools'][?@.name == '{$inputs.instance-pool}' || @.id == '{$inputs.instance-pool}']"
+          # one only: a name that several share is ambiguous
+          - context: $response.body
+            type: jsonpath
+            condition: "$[?count(@[?@.name == '{$inputs.instance-pool}' || @.id == '{$inputs.instance-pool}']) == 1]"
         outputs:
           id:
             context: $response.body
@@ -5291,6 +5327,10 @@ workflows:
           - context: $response.body
             type: jsonpath
             condition: "$['load-balancers'][?@.name == '{$inputs.load-balancer}' || @.id == '{$inputs.load-balancer}']"
+          # one only: a name that several share is ambiguous
+          - context: $response.body
+            type: jsonpath
+            condition: "$[?count(@[?@.name == '{$inputs.load-balancer}' || @.id == '{$inputs.load-balancer}']) == 1]"
         outputs:
           id:
             context: $response.body
@@ -5324,6 +5364,10 @@ workflows:
           - context: $response.body
             type: jsonpath
             condition: "$.services[?@.name == '{$inputs.service}' || @.id == '{$inputs.service}']"
+          # one only: a name that several share is ambiguous
+          - context: $response.body
+            type: jsonpath
+            condition: "$[?count(@[?@.name == '{$inputs.service}' || @.id == '{$inputs.service}']) == 1]"
         outputs:
           id:
             context: $response.body

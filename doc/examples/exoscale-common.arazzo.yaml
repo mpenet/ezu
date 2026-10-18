@@ -60,6 +60,10 @@ workflows:
           - context: $response.body
             type: jsonpath
             condition: "$.instances[?@.name == '{$inputs.instance}' || @.id == '{$inputs.instance}']"
+          # one only: a name that several share is ambiguous
+          - context: $response.body
+            type: jsonpath
+            condition: "$[?count(@[?@.name == '{$inputs.instance}' || @.id == '{$inputs.instance}']) == 1]"
         outputs:
           id:
             context: $response.body
@@ -86,6 +90,10 @@ workflows:
           - context: $response.body
             type: jsonpath
             condition: "$['security-groups'][?@.name == '{$inputs.security-group}' || @.id == '{$inputs.security-group}']"
+          # one only: a name that several share is ambiguous
+          - context: $response.body
+            type: jsonpath
+            condition: "$[?count(@[?@.name == '{$inputs.security-group}' || @.id == '{$inputs.security-group}']) == 1]"
         outputs:
           id:
             context: $response.body
@@ -112,6 +120,10 @@ workflows:
           - context: $response.body
             type: jsonpath
             condition: "$['elastic-ips'][?@.ip == '{$inputs.elastic-ip}' || @.id == '{$inputs.elastic-ip}']"
+          # one only: a name that several share is ambiguous
+          - context: $response.body
+            type: jsonpath
+            condition: "$[?count(@[?@.ip == '{$inputs.elastic-ip}' || @.id == '{$inputs.elastic-ip}']) == 1]"
         outputs:
           id:
             context: $response.body
@@ -138,6 +150,10 @@ workflows:
           - context: $response.body
             type: jsonpath
             condition: "$['private-networks'][?@.name == '{$inputs.private-network}' || @.id == '{$inputs.private-network}']"
+          # one only: a name that several share is ambiguous
+          - context: $response.body
+            type: jsonpath
+            condition: "$[?count(@[?@.name == '{$inputs.private-network}' || @.id == '{$inputs.private-network}']) == 1]"
         outputs:
           id:
             context: $response.body
@@ -164,6 +180,10 @@ workflows:
           - context: $response.body
             type: jsonpath
             condition: "$['anti-affinity-groups'][?@.name == '{$inputs.anti-affinity-group}' || @.id == '{$inputs.anti-affinity-group}']"
+          # one only: a name that several share is ambiguous
+          - context: $response.body
+            type: jsonpath
+            condition: "$[?count(@[?@.name == '{$inputs.anti-affinity-group}' || @.id == '{$inputs.anti-affinity-group}']) == 1]"
         outputs:
           id:
             context: $response.body
@@ -190,6 +210,10 @@ workflows:
           - context: $response.body
             type: jsonpath
             condition: "$['block-storage-volumes'][?@.name == '{$inputs.volume}' || @.id == '{$inputs.volume}']"
+          # one only: a name that several share is ambiguous
+          - context: $response.body
+            type: jsonpath
+            condition: "$[?count(@[?@.name == '{$inputs.volume}' || @.id == '{$inputs.volume}']) == 1]"
         outputs:
           id:
             context: $response.body

@@ -36,6 +36,10 @@ workflows:
           - context: $response.body
             type: jsonpath
             condition: "$['sks-clusters'][?@.name == '{$inputs.cluster}' || @.id == '{$inputs.cluster}']"
+          # one only: a name that several share is ambiguous
+          - context: $response.body
+            type: jsonpath
+            condition: "$[?count(@[?@.name == '{$inputs.cluster}' || @.id == '{$inputs.cluster}']) == 1]"
         outputs:
           id:
             context: $response.body
@@ -74,6 +78,10 @@ workflows:
           - context: $response.body
             type: jsonpath
             condition: "$.nodepools[?@.name == '{$inputs.nodepool}' || @.id == '{$inputs.nodepool}']"
+          # one only: a name that several share is ambiguous
+          - context: $response.body
+            type: jsonpath
+            condition: "$[?count(@[?@.name == '{$inputs.nodepool}' || @.id == '{$inputs.nodepool}']) == 1]"
         outputs:
           id:
             context: $response.body

@@ -35,6 +35,10 @@ workflows:
           - context: $response.body
             type: jsonpath
             condition: "$['dns-domains'][?@['unicode-name'] == '{$inputs.domain}' || @.id == '{$inputs.domain}']"
+          # one only: a name that several share is ambiguous
+          - context: $response.body
+            type: jsonpath
+            condition: "$[?count(@[?@['unicode-name'] == '{$inputs.domain}' || @.id == '{$inputs.domain}']) == 1]"
         outputs:
           id:
             context: $response.body
@@ -72,6 +76,10 @@ workflows:
           - context: $response.body
             type: jsonpath
             condition: "$['dns-domain-records'][?(@.name == '{$inputs.record}' && ('{$inputs.type}' == '' || @.type == '{$inputs.type}')) || @.id == '{$inputs.record}']"
+          # one only: a name that several share is ambiguous
+          - context: $response.body
+            type: jsonpath
+            condition: "$[?count(@[?(@.name == '{$inputs.record}' && ('{$inputs.type}' == '' || @.type == '{$inputs.type}')) || @.id == '{$inputs.record}']) == 1]"
         outputs:
           id:
             context: $response.body

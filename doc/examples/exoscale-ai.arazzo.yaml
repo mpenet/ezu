@@ -34,6 +34,10 @@ workflows:
           - context: $response.body
             type: jsonpath
             condition: "$.models[?@.name == '{$inputs.model}' || @.id == '{$inputs.model}']"
+          # one only: a name that several share is ambiguous
+          - context: $response.body
+            type: jsonpath
+            condition: "$[?count(@[?@.name == '{$inputs.model}' || @.id == '{$inputs.model}']) == 1]"
         outputs:
           id:
             context: $response.body
@@ -60,6 +64,10 @@ workflows:
           - context: $response.body
             type: jsonpath
             condition: "$.deployments[?@.name == '{$inputs.deployment}' || @.id == '{$inputs.deployment}']"
+          # one only: a name that several share is ambiguous
+          - context: $response.body
+            type: jsonpath
+            condition: "$[?count(@[?@.name == '{$inputs.deployment}' || @.id == '{$inputs.deployment}']) == 1]"
         outputs:
           id:
             context: $response.body
@@ -86,6 +94,10 @@ workflows:
           - context: $response.body
             type: jsonpath
             condition: "$['ai-api-keys'][?@.name == '{$inputs.api-key}' || @.id == '{$inputs.api-key}']"
+          # one only: a name that several share is ambiguous
+          - context: $response.body
+            type: jsonpath
+            condition: "$[?count(@[?@.name == '{$inputs.api-key}' || @.id == '{$inputs.api-key}']) == 1]"
         outputs:
           id:
             context: $response.body

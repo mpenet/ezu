@@ -3961,7 +3961,8 @@ workflows:
           contentType: application/json
           payload:
             name: $inputs.name
-            size: 0
+            size: $inputs.size
+            min-available: $inputs.min-available
             description: $inputs.description
             template:
               id: $steps.template.outputs.id
@@ -3975,6 +3976,13 @@ workflows:
             ipv6-enabled: $inputs.ipv6
             deploy-target:
               id: $steps.deploy-target.outputs.id
+            # each left out when its lookup was skipped
+            security-groups:
+              - id: $steps.security-group.outputs.id
+            anti-affinity-groups:
+              - id: $steps.anti-affinity-group.outputs.id
+            private-networks:
+              - id: $steps.private-network.outputs.id
             labels: $inputs.labels
             user-data: $inputs.user-data
         successCriteria:
@@ -3986,143 +3994,6 @@ workflows:
         parameters:
           - name: id
             value: $steps.create.outputs.job
-        onSuccess:
-          - name: skip-to-scale
-            type: goto
-            stepId: scale
-            criteria:
-              - condition: $inputs.security-group == null && $inputs.anti-affinity-group == null && $inputs.private-network == null
-          - name: skip-to-set-private-network
-            type: goto
-            stepId: set-private-network
-            criteria:
-              - condition: $inputs.security-group == null && $inputs.anti-affinity-group == null
-          - name: skip-to-set-anti-affinity-group
-            type: goto
-            stepId: set-anti-affinity-group
-            criteria:
-              - condition: $inputs.security-group == null
-      - stepId: set-security-group
-        operationId: update-instance-pool
-        parameters:
-          - name: id
-            in: path
-            value: $steps.created.outputs.reference
-        requestBody:
-          contentType: application/json
-          payload:
-            security-groups:
-              - id: $steps.security-group.outputs.id
-        successCriteria:
-          - condition: $statusCode == 200
-        outputs:
-          job: $response.body#/id
-      - stepId: security-group-set
-        workflowId: $sourceDescriptions.common.operation-wait
-        parameters:
-          - name: id
-            value: $steps.set-security-group.outputs.job
-        onSuccess:
-          - name: skip-to-scale
-            type: goto
-            stepId: scale
-            criteria:
-              - condition: $inputs.anti-affinity-group == null && $inputs.private-network == null
-          - name: skip-to-set-private-network
-            type: goto
-            stepId: set-private-network
-            criteria:
-              - condition: $inputs.anti-affinity-group == null
-      - stepId: set-anti-affinity-group
-        operationId: update-instance-pool
-        parameters:
-          - name: id
-            in: path
-            value: $steps.created.outputs.reference
-        requestBody:
-          contentType: application/json
-          payload:
-            anti-affinity-groups:
-              - id: $steps.anti-affinity-group.outputs.id
-        successCriteria:
-          - condition: $statusCode == 200
-        outputs:
-          job: $response.body#/id
-      - stepId: anti-affinity-group-set
-        workflowId: $sourceDescriptions.common.operation-wait
-        parameters:
-          - name: id
-            value: $steps.set-anti-affinity-group.outputs.job
-        onSuccess:
-          - name: skip-to-scale
-            type: goto
-            stepId: scale
-            criteria:
-              - condition: $inputs.private-network == null
-      - stepId: set-private-network
-        operationId: update-instance-pool
-        parameters:
-          - name: id
-            in: path
-            value: $steps.created.outputs.reference
-        requestBody:
-          contentType: application/json
-          payload:
-            private-networks:
-              - id: $steps.private-network.outputs.id
-        successCriteria:
-          - condition: $statusCode == 200
-        outputs:
-          job: $response.body#/id
-      - stepId: private-network-set
-        workflowId: $sourceDescriptions.common.operation-wait
-        parameters:
-          - name: id
-            value: $steps.set-private-network.outputs.job
-      - stepId: scale
-        operationId: scale-instance-pool
-        parameters:
-          - name: id
-            in: path
-            value: $steps.created.outputs.reference
-        requestBody:
-          contentType: application/json
-          payload:
-            size: $inputs.size
-        successCriteria:
-          - condition: $statusCode == 200
-        outputs:
-          job: $response.body#/id
-      - stepId: scaled
-        workflowId: $sourceDescriptions.common.operation-wait
-        parameters:
-          - name: id
-            value: $steps.scale.outputs.job
-        onSuccess:
-          - name: skip-to-show
-            type: goto
-            stepId: show
-            criteria:
-              - condition: $inputs.min-available == null
-      - stepId: set-min-available
-        operationId: update-instance-pool
-        parameters:
-          - name: id
-            in: path
-            value: $steps.created.outputs.reference
-        requestBody:
-          contentType: application/json
-          payload:
-            min-available: $inputs.min-available
-        successCriteria:
-          - condition: $statusCode == 200
-        outputs:
-          job: $response.body#/id
-      - stepId: min-available-set
-        workflowId: $sourceDescriptions.common.operation-wait
-        parameters:
-          - name: id
-            value: $steps.set-min-available.outputs.job
       - stepId: show
         workflowId: instance-pool-show
         parameters:
@@ -4395,6 +4266,13 @@ workflows:
             min-available: $inputs.min-available
             deploy-target:
               id: $steps.deploy-target.outputs.id
+            # each left out when its lookup was skipped
+            security-groups:
+              - id: $steps.security-group.outputs.id
+            anti-affinity-groups:
+              - id: $steps.anti-affinity-group.outputs.id
+            private-networks:
+              - id: $steps.private-network.outputs.id
             labels: $inputs.labels
             user-data: $inputs.user-data
         successCriteria:
@@ -4406,99 +4284,6 @@ workflows:
         parameters:
           - name: id
             value: $steps.update.outputs.job
-        onSuccess:
-          - name: skip-to-show
-            type: goto
-            stepId: show
-            criteria:
-              - condition: $inputs.security-group == null && $inputs.anti-affinity-group == null && $inputs.private-network == null
-          - name: skip-to-set-private-network
-            type: goto
-            stepId: set-private-network
-            criteria:
-              - condition: $inputs.security-group == null && $inputs.anti-affinity-group == null
-          - name: skip-to-set-anti-affinity-group
-            type: goto
-            stepId: set-anti-affinity-group
-            criteria:
-              - condition: $inputs.security-group == null
-      - stepId: set-security-group
-        operationId: update-instance-pool
-        parameters:
-          - name: id
-            in: path
-            value: $steps.find.outputs.id
-        requestBody:
-          contentType: application/json
-          payload:
-            security-groups:
-              - id: $steps.security-group.outputs.id
-        successCriteria:
-          - condition: $statusCode == 200
-        outputs:
-          job: $response.body#/id
-      - stepId: security-group-set
-        workflowId: $sourceDescriptions.common.operation-wait
-        parameters:
-          - name: id
-            value: $steps.set-security-group.outputs.job
-        onSuccess:
-          - name: skip-to-show
-            type: goto
-            stepId: show
-            criteria:
-              - condition: $inputs.anti-affinity-group == null && $inputs.private-network == null
-          - name: skip-to-set-private-network
-            type: goto
-            stepId: set-private-network
-            criteria:
-              - condition: $inputs.anti-affinity-group == null
-      - stepId: set-anti-affinity-group
-        operationId: update-instance-pool
-        parameters:
-          - name: id
-            in: path
-            value: $steps.find.outputs.id
-        requestBody:
-          contentType: application/json
-          payload:
-            anti-affinity-groups:
-              - id: $steps.anti-affinity-group.outputs.id
-        successCriteria:
-          - condition: $statusCode == 200
-        outputs:
-          job: $response.body#/id
-      - stepId: anti-affinity-group-set
-        workflowId: $sourceDescriptions.common.operation-wait
-        parameters:
-          - name: id
-            value: $steps.set-anti-affinity-group.outputs.job
-        onSuccess:
-          - name: skip-to-show
-            type: goto
-            stepId: show
-            criteria:
-              - condition: $inputs.private-network == null
-      - stepId: set-private-network
-        operationId: update-instance-pool
-        parameters:
-          - name: id
-            in: path
-            value: $steps.find.outputs.id
-        requestBody:
-          contentType: application/json
-          payload:
-            private-networks:
-              - id: $steps.private-network.outputs.id
-        successCriteria:
-          - condition: $statusCode == 200
-        outputs:
-          job: $response.body#/id
-      - stepId: private-network-set
-        workflowId: $sourceDescriptions.common.operation-wait
-        parameters:
-          - name: id
-            value: $steps.set-private-network.outputs.job
       - stepId: show
         workflowId: instance-pool-show
         parameters:

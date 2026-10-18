@@ -262,7 +262,13 @@ Expression format: '{$sourceDescriptions.NAME.url}#/paths/~1foo/method'"
   "The key of node that pointer segment k names: arrays take a 0-based index,
 or - for the end (RFC 6901)."
   (if (not (json.array? node)) k (= k "-") (+ 1 (length node))
-      (k:match "^%d+$") (+ 1 (tonumber k))
+      (k:match "^%d+$") (let [i (tonumber k)]
+                         (when (>= i (length node))
+                           (error (.. "replacement target " pointer
+                                      ": no item " k " in an array of "
+                                      (length node) "; - appends")
+                                  0))
+                         (+ 1 i))
       (error (.. "replacement target " pointer ": '" k
                  "' is not an array index") 0)))
 

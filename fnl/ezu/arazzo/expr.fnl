@@ -242,8 +242,10 @@ depend on the data. Runtime expressions may be embedded in the selector with
                      (eval-jsonpath-template ctx obj.selector)
                      (eval-template ctx obj.selector))]
     (match kind
-      :jsonpath (let [nodes (jsonpath.query selector data)]
-                  (if (. (jsonpath.compile selector) :singular)
+      :jsonpath (let [;; held, so that the query reuses it from the cache
+                      query (jsonpath.compile selector)
+                      nodes (jsonpath.query selector data)]
+                  (if query.singular
                       (?. nodes 1 :value)
                       (json.array (icollect [_ n (ipairs nodes)]
                                     n.value))))

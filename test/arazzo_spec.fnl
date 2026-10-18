@@ -1096,7 +1096,16 @@
                     (let [(ok err) (pcall run "/tags/x")]
                       (assert.is_false ok)
                       (assert.is_truthy (: (tostring err) :find
-                                           "not an array index" 1 true))))))))
+                                           "not an array index" 1 true)))
+                    ;; only - appends: an index must name an item there is
+                    (run "/tags/0")
+                    (assert.are.same ["b"] (. seen 2 :body :tags))
+                    (let [(ok err) (pcall run "/tags/1")]
+                      (assert.is_false ok)
+                      (assert.is_truthy (: (tostring err) :find
+                                           "replacement target /tags/1: no item 1 in an array of 1; - appends"
+                                           1 true)
+                                        (tostring err))))))))
 
 (describe "workflow inputs from another file"
           (fn []

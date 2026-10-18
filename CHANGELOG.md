@@ -29,6 +29,7 @@ All notable changes to ezu, named atlas until 1.0.0-beta7. The format follows [K
 
 ### Fixed
 
+- A replacement's JSON Pointer one past the end of an array (`/items/2` with two items) appended silently; only `-` appends now, and any other index past the end is an error.
 - A `{$expression}` embedded in a JSONPath query was pasted as text: a value with a quote broke the query, and a crafted one could change what it selects. Inside a string literal, the value is now escaped for its quotes; elsewhere a string goes in as text, as before, and other values as JSON literals.
 - Keywords next to a `$ref` in a schema were ignored: a `description` beside it now replaces the target's (in help too), and other keywords apply along with the target's (`nullable: true` beside a `$ref`, a common OpenAPI 3.0 pattern, included).
 - On macOS, a plugin file with extended attributes (`@` in `ls -l`) and an access list was loaded: `ls` shows `@` in place of the `+` that marks an access list. ezu now reads the access list itself (`ls -le`) and refuses such a plugin.

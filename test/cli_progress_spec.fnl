@@ -272,6 +272,26 @@ lines ended so far, then the current one if it isn't empty."
                                               :passed true
                                               :elapsed 0.15})]
                                         {:finish [true "outer" 0.2]}))))
+            (it "names another document's workflow by its source"
+                (fn []
+                  (assert.are.same ["✓ 1/1 call  workflow common.inner  150ms"
+                                    "✓ workflow outer  200ms"]
+                                   (run [(ev :workflow
+                                             {:workflow "outer"
+                                              :steps [{:step "call"
+                                                       :op-ref "$sourceDescriptions.common.inner"
+                                                       :calls "workflow"}]})
+                                         (ev :done
+                                             {:workflow "outer"
+                                              :step "call"
+                                              :index 1
+                                              :count 1
+                                              :attempt 1
+                                              :op-ref "$sourceDescriptions.common.inner"
+                                              :calls "workflow"
+                                              :passed true
+                                              :elapsed 0.15})]
+                                        {:finish [true "outer" 0.2]}))))
             (it "names operations briefly"
                 (fn []
                   (assert.are.same ["✓ 1/2 a  getPet          1ms  200"

@@ -1754,3 +1754,201 @@ and record their requests in the returned list."
                                                    :url "./nowhere.yaml"}]
                              :workflows []}]
                     (assert.are.same {} (arazzo.build-clients doc {})))))))
+
+(describe "workflows of other Arazzo documents"
+          (fn []
+            (local json (require :ezu.json))
+
+            (fn tmp-dir [files]
+              "A new directory holding files ({relative-path → table, as JSON})."
+              (let [dir (os.tmpname)]
+                (os.remove dir)
+                (each [name content (pairs files)]
+                  (let [path (.. dir "/" name)]
+                    (os.execute (.. "mkdir -p '" (path:match "^(.*)/") "'"))
+                    (with-open [f (io.open path :w)]
+                      (f:write (json.encode content)))))
+                dir))
+
+            (fn arazzo-doc [sources workflows]
+              {:arazzo "1.1.0"
+               :info {:title "t" :version "1"}
+               :sourceDescriptions sources
+               : workflows})
+
+            (local main-doc
+                   (arazzo-doc [{:name "common"
+                                 :url "lib/common.json"
+                                 :type "arazzo"}]
+                               [{:workflowId "w"
+                                 :inputs {:type "object"
+                                          :properties {:n {:type "integer"}}}
+                                 :steps [{:stepId "s"
+                                          :workflowId "$sourceDescriptions.common.echo"
+                                          :parameters [{:name "n"
+                                                        :value "$inputs.n"}]}]
+                                 :outputs {:r "$steps.s.outputs.r"}}]))
+            (local echo-doc
+                   (arazzo-doc [{:name "api" :url "api.json" :type "openapi"}]
+                               [{:workflowId "echo"
+                                 :steps []
+                                 :outputs {:r "$inputs.n"}}
+                                {:workflowId "fetch"
+                                 :steps [{:stepId "get"
+                                          :operationId "getX"
+                                          :outputs {:v "$response.body#/v"}}]
+                                 :outputs {:v "$steps.get.outputs.v"}}]))
+            (local api
+                   {:openapi "3.0.0"
+                    :info {:title "a" :version "1"}
+                    :servers [{:url "https://{zone}.api.test"
+                               :variables {:zone {:default "z1"}}}]
+                    :paths {:/x {:get {:operationId "getX" :responses {}}}}})
+
+            (fn run-in [dir workflow-id inputs ?opts]
+              (let [(ok result) (pcall arazzo.run (.. dir "/main.json")
+                                       workflow-id inputs ?opts)]
+                (os.execute (.. "rm -rf '" dir "'"))
+                (values ok result)))
+
+            (it "runs a workflow of an Arazzo source, its outputs the step's"
+                (fn []
+                  (let [dir (tmp-dir {:main.json main-doc
+                                      :lib/common.json echo-doc
+                                      :lib/api.json api})
+                        (ok result) (run-in dir "w" {:n 4})]
+                    (assert.is_true ok result)
+                    (assert.are.equal 4 result.outputs.r))))
+            (it "runs it with its own document's sources and the run's options"
+                (fn []
+                  (let [doc (doto (arazzo-doc main-doc.sourceDescriptions
+                                              [{:workflowId "w"
+                                                :steps [{:stepId "s"
+                                                         :workflowId "$sourceDescriptions.common.fetch"}]
+                                                :outputs {:v "$steps.s.outputs.v"}}]))
+                        dir (tmp-dir {:main.json doc
+                                      :lib/common.json echo-doc
+                                      :lib/api.json api})
+                        urls []
+                        (ok result) (run-in dir "w" {}
+                                            {:server-vars {:zone "z9"}
+                                             :http-fn (fn [req]
+                                                        (table.insert urls
+                                                                      req.url)
+                                                        (ok-resp {:v 7}))})]
+                    (assert.is_true ok result)
+                    (assert.are.equal 7 result.outputs.v)
+                    (assert.are.same ["https://z9.api.test/x"] urls))))
+            (it "names the source and workflow when it fails"
+                (fn []
+                  (let [doc (arazzo-doc main-doc.sourceDescriptions
+                                        [{:workflowId "w"
+                                          :steps [{:stepId "s"
+                                                   :workflowId "$sourceDescriptions.common.fetch"}]}])
+                        failing (doto (arazzo-doc echo-doc.sourceDescriptions
+                                                  [{:workflowId "fetch"
+                                                    :steps [{:stepId "get"
+                                                             :operationId "getX"
+                                                             :successCriteria [{:condition "$statusCode == 200"}]}]}]))
+                        dir (tmp-dir {:main.json doc
+                                      :lib/common.json failing
+                                      :lib/api.json api})
+                        (ok err) (run-in dir "w" {}
+                                         {:http-fn #(ok-resp {} 500)})]
+                    (assert.is_false ok)
+                    (assert.is_truthy (: (tostring err) :find
+                                         "step 's' (common.fetch) › step 'get' failed: $statusCode == 200"
+                                         1 true)))))
+            (it "goes to a workflow of an Arazzo source"
+                (fn []
+                  (let [doc (arazzo-doc main-doc.sourceDescriptions
+                                        [{:workflowId "w"
+                                          :steps [{:stepId "s"
+                                                   :workflowId "$sourceDescriptions.common.echo"
+                                                   :parameters [{:name "n"
+                                                                 :value 1}]
+                                                   :onSuccess [{:name "next"
+                                                                :type "goto"
+                                                                :workflowId "$sourceDescriptions.common.echo"
+                                                                :parameters [{:name "n"
+                                                                              :value 2}]}]}]}])
+                        dir (tmp-dir {:main.json doc
+                                      :lib/common.json echo-doc
+                                      :lib/api.json api})
+                        (ok result) (run-in dir "w" {})]
+                    (assert.is_true ok result))))
+            (it "stops a cycle across documents"
+                (fn []
+                  (let [doc (arazzo-doc [{:name "other"
+                                          :url "other.json"
+                                          :type "arazzo"}]
+                                        [{:workflowId "w"
+                                          :steps [{:stepId "s"
+                                                   :workflowId "$sourceDescriptions.other.back"}]}])
+                        other (arazzo-doc [{:name "main"
+                                            :url "main.json"
+                                            :type "arazzo"}]
+                                          [{:workflowId "back"
+                                            :steps [{:stepId "s"
+                                                     :workflowId "$sourceDescriptions.main.w"}]}])
+                        dir (tmp-dir {:main.json doc :other.json other})
+                        (ok err) (run-in dir "w" {})]
+                    (assert.is_false ok)
+                    (assert.is_truthy (: (tostring err) :find
+                                         "workflow cycle: w -> other.back -> main.w"
+                                         1 true)))))
+            (it "says when a source isn't an Arazzo document or lacks the workflow"
+                (fn []
+                  (let [doc (arazzo-doc [{:name "api"
+                                          :url "lib/api.json"
+                                          :type "openapi"}
+                                         {:name "common"
+                                          :url "lib/common.json"
+                                          :type "arazzo"}]
+                                        [{:workflowId "a"
+                                          :steps [{:stepId "s"
+                                                   :workflowId "$sourceDescriptions.api.x"}]}
+                                         {:workflowId "b"
+                                          :steps [{:stepId "s"
+                                                   :workflowId "$sourceDescriptions.common.nope"}]}])
+                        files {:main.json doc
+                               :lib/common.json echo-doc
+                               :lib/api.json api}
+                        (_ err-a) (run-in (tmp-dir files) "a" {})
+                        (_ err-b) (run-in (tmp-dir files) "b" {})]
+                    (assert.is_truthy (: (tostring err-a) :find
+                                         "source 'api' is not an Arazzo document"
+                                         1 true))
+                    (assert.is_truthy (: (tostring err-b) :find
+                                         "workflow not found: common.nope" 1
+                                         true)))))
+            (it "loads only sources next to the document unless sources are trusted"
+                (fn []
+                  (let [lib (tmp-dir {:common.json echo-doc :api.json api})
+                        absolute (arazzo-doc [{:name "common"
+                                               :url (.. lib "/common.json")
+                                               :type "arazzo"}]
+                                             main-doc.workflows)
+                        remote (arazzo-doc [{:name "common"
+                                             :url "https://elsewhere.test/common.json"
+                                             :type "arazzo"}]
+                                           main-doc.workflows)
+                        elsewhere (doto (arazzo-doc main-doc.sourceDescriptions
+                                                    main-doc.workflows)
+                                    (tset "$self"
+                                          "https://elsewhere.test/main.json"))
+                        (_ err-abs) (run-in (tmp-dir {:main.json absolute}) "w"
+                                            {:n 1})
+                        (_ err-remote) (run-in (tmp-dir {:main.json remote})
+                                               "w" {:n 1})
+                        (_ err-self) (run-in (tmp-dir {:main.json elsewhere})
+                                             "w" {:n 1})
+                        (ok result) (run-in (tmp-dir {:main.json absolute}) "w"
+                                            {:n 1} {:trust-sources true})]
+                    (os.execute (.. "rm -rf '" lib "'"))
+                    (each [_ err (ipairs [err-abs err-remote err-self])]
+                      (assert.is_truthy (: (tostring err) :find
+                                           "Arazzo source 'common' is not next to the document"
+                                           1 true)))
+                    (assert.is_true ok result)
+                    (assert.are.equal 1 result.outputs.r))))))

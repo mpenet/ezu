@@ -13,14 +13,18 @@
 
 (fn op-name [op-ref calls]
   "What a step calls, briefly: getPet for $sourceDescriptions.api.getPet,
-GET /pets/{id} for an operationPath, workflow ID for a workflow."
+GET /pets/{id} for an operationPath, workflow ID for a workflow, workflow
+SOURCE.ID for another document's."
   (let [ref (tostring op-ref)
         id (ref:match "^%$sourceDescriptions%.[^%.]+%.(.+)$")
         (path method) (ref:match "#/paths/([^/]+)/(%a+)$")]
-    (if (= calls :workflow) (.. "workflow " ref)
-        id id
-        path (.. (method:upper) " "
-                 (pick-values 1 (: (path:gsub "~1" "/") :gsub "~0" "~")))
+    (if (= calls :workflow)
+        (.. "workflow " (or (ref:match "^%$sourceDescriptions%.(.+)$") ref))
+        id
+        id
+        path
+        (.. (method:upper) " "
+            (pick-values 1 (: (path:gsub "~1" "/") :gsub "~0" "~")))
         ref)))
 
 (fn one-line [s]

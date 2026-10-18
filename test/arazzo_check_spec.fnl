@@ -260,16 +260,56 @@
                   (assert.are.same []
                                    (messages (check.check (doc [(step {:successCriteria [{:condition "$response.body#/note == 'costs $5'"}]})])
                                                           clients)))))
-            (it "says that workflows of other documents aren't supported"
+            (it "follows workflows of other Arazzo documents"
                 (fn []
-                  (let [problems (check.check (doc [{:stepId "call"
-                                                     :workflowId "$sourceDescriptions.other.ow"}]
-                                                   {:outputs {:x "$steps.call.outputs.res"}})
-                                              clients)]
-                    (assert.is_true (has problems
-                                         "workflows of other Arazzo documents are not supported"
-                                         :error))
-                    (assert.are.equal 1 (length (messages problems))))))
+                  (let [json (require :ezu.json)
+                        dir "build/check-sources"
+                        other {:arazzo "1.1.0"
+                               :info {}
+                               :workflows [{:workflowId "ow"
+                                            :steps []
+                                            :outputs {:res "$inputs.id"}}
+                                           {:workflowId "broken"
+                                            :steps [{:stepId "s"
+                                                     :workflowId "missing"}]}]}
+                        sources {:sourceDescriptions [{:name "other"
+                                                       :type "arazzo"
+                                                       :url (.. dir
+                                                                "/other.json")}]}
+                        check-steps #(check.check (doc $1 $2 sources) clients
+                                                  {} {})]
+                    (os.execute (.. "mkdir -p " dir))
+                    (with-open [f (io.open (.. dir "/other.json") :w)]
+                      (f:write (json.encode other)))
+                    (let [fine (check-steps [{:stepId "call"
+                                              :workflowId "$sourceDescriptions.other.ow"}]
+                                            {:outputs {:x "$steps.call.outputs.res"}
+                                             :dependsOn ["$sourceDescriptions.other.ow"]})
+                          wrong (check-steps [{:stepId "call"
+                                               :workflowId "$sourceDescriptions.other.nope"}
+                                              {:stepId "out"
+                                               :workflowId "$sourceDescriptions.other.ow"}]
+                                             {:outputs {:x "$steps.out.outputs.zzz"}})
+                          far (check.check (doc [{:stepId "call"
+                                                  :workflowId "$sourceDescriptions.other.ow"}]
+                                                nil
+                                                {:sourceDescriptions [{:name "other"
+                                                                       :type "arazzo"
+                                                                       :url "https://elsewhere.test/other.json"}]})
+                                           clients {} {})]
+                      (os.execute (.. "rm -rf " dir))
+                      ;; the other document's own problems, under its name
+                      (assert.are.same ["other › broken › step s: unknown workflow 'missing'"]
+                                       (messages fine))
+                      (assert.is_true (has wrong
+                                           "wf › step call: source 'other' has no workflow 'nope'"
+                                           :error))
+                      (assert.is_true (has wrong
+                                           "wf: step 'out' has no output 'zzz'"
+                                           :error))
+                      (assert.is_true (has far
+                                           "wf › step call: Arazzo source 'other' is not next to the document"
+                                           :error))))))
             (it "reports a workflow's own actions once"
                 (fn []
                   (let [problems (check.check (doc [get-pet

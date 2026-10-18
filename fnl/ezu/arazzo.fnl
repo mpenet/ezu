@@ -101,7 +101,10 @@ declares; records the variables it used in used."
 
 (fn build-clients [doc ?opts ?location]
   "Returns {sourceName → ezu-client} for openapi sourceDescriptions.
-Relative source URLs resolve against ?location, the document's own path or URL."
+Relative source URLs resolve against ?location, the document's own path or URL.
+?opts.source-clients, when given, keeps the clients built by URL so that each
+is built once; with ?opts.server-vars-elsewhere, server variables no source of
+doc declares are left to other documents."
   (let [clients {}
         base (base-uri doc ?location)
         sources (icollect [_ src (ipairs (or doc.sourceDescriptions []))]
@@ -119,13 +122,21 @@ Relative source URLs resolve against ?location, the document's own path or URL."
           used {}]
       (each [_ src (ipairs sources)]
         (let [url (if base (util.resolve-reference base src.url) src.url)
-              (ok c) (pcall source-client url (or ?opts {}) server-vars used)]
+              cache (?. ?opts :source-clients)
+              (ok c) (if (and cache (. cache url)) (values true (. cache url))
+                         (pcall source-client url (or ?opts {}) server-vars
+                                used))]
           (when (not ok)
             (error (.. "source '" src.name "': " (tostring c)) 0))
+          (when cache
+            (tset cache url c))
           (tset clients src.name c)))
-      (each [name (pairs server-vars)]
-        (when (not (. used name))
-          (error (.. "no openapi source declares server variable '" name "'") 0))))
+      ;; an index of other documents leaves its variables to them
+      (when (not (or (?. ?opts :server-vars-elsewhere) (= 0 (length sources))))
+        (each [name (pairs server-vars)]
+          (when (not (. used name))
+            (error (.. "no openapi source declares server variable '" name "'")
+                   0)))))
     clients))
 
 ;; ---- operation lookup ----
@@ -350,6 +361,17 @@ target; a :value on the reference overrides the target parameter's value."
         (table.insert out a)))
     out))
 
+(fn external-workflow [workflow-id]
+  "The source and workflow id of $sourceDescriptions.SOURCE.WORKFLOW, a
+workflow of another Arazzo document; nil for one of this document."
+  (when (= (type workflow-id) :string)
+    (workflow-id:match "^%$sourceDescriptions%.([^%.]+)%.(.+)$")))
+
+(fn workflow-label [workflow-id]
+  "workflow-id for people: SOURCE.WORKFLOW for another document's."
+  (let [(source id) (external-workflow workflow-id)]
+    (if source (.. source "." id) (tostring workflow-id))))
+
 ;; response bodies longer than this are cut in failure messages
 (local message-body-length 500)
 
@@ -358,7 +380,7 @@ target; a :value on the reference overrides the target parameter's value."
 response's status and body. A failed sub-workflow's reason follows the step
 and the workflow it ran: step 'find' (lookup) › step 'list' failed: …"
   (if (and outcome.error outcome.workflow)
-      (.. "step '" step-id "' (" outcome.workflow ") › "
+      (.. "step '" step-id "' (" (workflow-label outcome.workflow) ") › "
           (tostring outcome.error))
       outcome.error
       (.. "step '" step-id "' failed: " (tostring outcome.error))
@@ -375,20 +397,24 @@ and the workflow it ran: step 'find' (lookup) › step 'list' failed: …"
   (accumulate [found nil _ wf (ipairs (or doc.workflows [])) &until found]
     (when (= wf.workflowId workflow-id) wf)))
 
-(fn enter-workflow [workflow-id ?opts]
-  "?opts with workflow-id pushed on the running-workflow stack; a workflow
-already on the stack means a cycle (dependsOn or a step calling itself)."
-  (let [stack (or (?. ?opts :workflow-stack) [])]
-    (each [_ active (ipairs stack)]
-      (when (= active workflow-id)
-        (error (.. "workflow cycle: " (table.concat stack " -> ") " -> "
-                   workflow-id) 0)))
+(fn enter-workflow [key label ?opts]
+  "?opts with the workflow key (its document and id) pushed on the
+running-workflow stack, as label for people; a workflow already on the stack
+means a cycle (dependsOn or a step calling itself)."
+  (let [stack (or (?. ?opts :workflow-stack) [])
+        keys (or (?. ?opts :workflow-keys) [])]
+    (each [_ active (ipairs keys)]
+      (when (= active key)
+        (error (.. "workflow cycle: " (table.concat stack " -> ") " -> " label)
+               0)))
     (doto (collect [k v (pairs (or ?opts {}))]
             k
             v)
-      (tset :workflow-stack
-            (doto (icollect [_ w (ipairs stack)] w)
-              (table.insert workflow-id))))))
+      (tset :workflow-label nil)
+      (tset :workflow-keys (doto (icollect [_ k (ipairs keys)] k)
+                             (table.insert key)))
+      (tset :workflow-stack (doto (icollect [_ w (ipairs stack)] w)
+                              (table.insert label))))))
 
 (fn emit [run event]
   "Pass event to the run's on-step callback, with the workflow and its depth."
@@ -610,10 +636,76 @@ messages), and a dependsOn that sequential execution can't satisfy."
               (error (.. "step '" step.stepId "' depends on step '" dep
                          "', which runs after it") 0))))))))
 
+;; ---- workflows of other Arazzo documents ----
+
+(fn place [url]
+  "Where url is, to compare documents: :file for a local path, the origin of
+an http(s) URL, nil for anything else."
+  (if (url:match "^%a[%w+.-]*:") (util.origin url) :file))
+
+(fn next-to? [location reference url]
+  "Whether reference, resolved to url, is a relative reference that stays
+where the document at location is: local files, or the same origin."
+  (let [here (place location)]
+    (and (not (reference:match "^%a[%w+.-]*:"))
+         (not (reference:match "^[/~\\]")) (not= nil here) (= here (place url)))))
+
+(fn arazzo-source [doc source-name opts]
+  "{:doc :clients :url} of the Arazzo document doc's source source-name, loaded
+once per run (opts.arazzo-documents, by URL). Unless opts.trust-sources, it
+must be next to doc: a relative reference staying among local files, or on
+doc's origin, $self included."
+  (let [src (accumulate [found nil _ s (ipairs (or doc.sourceDescriptions []))
+                         &until found]
+              (when (= s.name source-name) s))]
+    (when (not src)
+      (error (.. "unknown source '" source-name "'") 0))
+    (when (or (not= src.type :arazzo) (not= (type src.url) :string))
+      (error (.. "source '" source-name "' is not an Arazzo document") 0))
+    (let [location (or (?. doc-sources doc :location) "./")
+          base (base-uri doc)
+          url (if base (util.resolve-reference base src.url) src.url)]
+      (when (not (or opts.trust-sources (next-to? location src.url url)))
+        (error (.. "Arazzo source '" source-name
+                   "' is not next to the document (" src.url
+                   "); it is only loaded with trust-sources") 0))
+      (when (not opts.arazzo-documents)
+        (set opts.arazzo-documents {}))
+      (or (. opts.arazzo-documents url)
+          (let [sub (load-doc url opts)
+                client-opts (collect [k v (pairs opts)]
+                              (when (not= k :on-step) (values k v)))
+                entry {:doc sub
+                       : url
+                       :clients (build-clients sub
+                                               (doto client-opts
+                                                 (tset :server-vars-elsewhere
+                                                       true))
+                                               url)}]
+            (tset opts.arazzo-documents url entry)
+            entry)))))
+
+(fn location [doc]
+  "Where doc was loaded from, or nil."
+  (?. doc-sources doc :location))
+
+(fn workflow-key [doc workflow-id]
+  "What tells a workflow from all others: its document's location and its id."
+  (.. (or (?. doc-sources doc :location) (tostring doc)) "#" workflow-id))
+
 (fn run-workflow [doc workflow-id given-inputs clients ?opts]
-  (let [wf (or (find-workflow doc workflow-id)
-               (error (.. "workflow not found: " workflow-id) 0))
-        opts (enter-workflow workflow-id ?opts)
+  (let [label (or (?. ?opts :workflow-label) workflow-id)
+        wf (or (find-workflow doc workflow-id)
+               (error (.. "workflow not found: " label) 0))
+        opts (enter-workflow (workflow-key doc workflow-id) label ?opts)
+        ;; documents and clients are shared by the workflows the run runs
+        _ (when (not opts.arazzo-documents)
+            (set opts.arazzo-documents {})
+            (match (?. doc-sources doc :location)
+              location (tset opts.arazzo-documents location
+                             {: doc : clients :url location})))
+        _ (when (not opts.source-clients)
+            (set opts.source-clients {}))
         _ (check-steps doc wf)
         inputs (with-input-defaults doc wf given-inputs)
         ctx {:inputs inputs
@@ -644,10 +736,23 @@ messages), and a dependsOn that sequential execution can't satisfy."
              :goto-counts {}
              :retry-counts {}
              :run-sub (fn [sub-id sub-inputs]
-                        (let [sub (run-workflow doc sub-id sub-inputs clients
-                                                opts)]
-                          (each [k v (pairs sub.ctx.workflows)]
-                            (tset ctx.workflows k v))
+                        (let [(source id) (external-workflow sub-id)
+                              other (when source
+                                      (arazzo-source doc source opts))
+                              sub (if other
+                                      (run-workflow other.doc id sub-inputs
+                                                    other.clients
+                                                    (doto (collect [k v (pairs opts)]
+                                                            k
+                                                            v)
+                                                      (tset :workflow-label
+                                                            (workflow-label sub-id))))
+                                      (run-workflow doc sub-id sub-inputs
+                                                    clients opts))]
+                          ;; another document's workflows are its own
+                          (when (not other)
+                            (each [k v (pairs sub.ctx.workflows)]
+                              (tset ctx.workflows k v)))
                           (tset ctx.workflows sub-id
                                 {:outputs sub.outputs :inputs sub.inputs})
                           sub))}
@@ -715,7 +820,9 @@ the step runs again), :op-ref and :calls (:operation or :workflow)."
         clients (or (?. ?opts :clients) (build-clients doc client-opts path))]
     (run-workflow doc workflow-id (or inputs {}) clients ?opts)))
 
-{:build-clients build-clients
+{:arazzo-source arazzo-source
+ :location location
+ :build-clients build-clients
  :find-op-by-id find-op-by-id
  :find-op-by-path find-op-by-path
  :load-doc load-doc

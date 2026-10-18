@@ -52,9 +52,13 @@
   (if (s:match "^%$%a") [s] (icollect [e (s:gmatch "{(%$[^}]+)}")]
                               e)))
 
-(fn checker [doc clients supplied]
-  "The problems found in doc: [{:level :where :message}]."
+(fn checker [doc clients supplied opts]
+  "The problems found in doc: [{:level :where :message}], and the Arazzo
+documents its workflows come from: [{:name :doc :clients :url}]."
   (let [problems []
+        ;; source name -> {:doc :clients :url}, or false when it can't load
+        loaded {}
+        externals []
         workflows (collect [_ wf (ipairs (if (list? doc.workflows)
                                              doc.workflows
                                              []))]
@@ -69,13 +73,43 @@
     (fn report [level where message]
       (table.insert problems {: level : where : message}))
 
+    (fn other-document [where source]
+      "The Arazzo document source names, loaded once; reported when it can't be."
+      (when (= nil (. loaded source))
+        (let [(ok entry) (pcall arazzo.arazzo-source doc source opts)]
+          (if ok
+              (do
+                (tset loaded source entry)
+                (table.insert externals
+                              {:name source
+                               :doc entry.doc
+                               :clients entry.clients
+                               :url entry.url}))
+              (do
+                (tset loaded source false)
+                (report :error where (tostring entry))))))
+      (or (. loaded source) nil))
+
+    (fn other-workflow [id]
+      "The workflow of another document id names, once its document is loaded."
+      (let [(source wid) (id:match "^%$sourceDescriptions%.([^%.]+)%.(.+)$")
+            other (when source (. loaded source))]
+        (when other
+          (arazzo.find-workflow other.doc wid))))
+
     (fn check-workflow-id [where id]
-      "Report a workflowId that is not one of the document's workflows."
+      "Report a workflowId that is neither one of the document's workflows nor
+one of an Arazzo source's."
       (if (not= (type id) :string)
           (report :error where "workflowId must be a string")
           (external? id)
-          (report :error where (.. "workflows of other Arazzo documents are not supported: "
-                                   id))
+          (let [(source wid) (id:match "^%$sourceDescriptions%.([^%.]+)%.(.+)$")]
+            (if (not source)
+                (report :error where (.. "unknown workflow '" id "'"))
+                (let [other (other-document where source)]
+                  (when (and other (not (arazzo.find-workflow other.doc wid)))
+                    (report :error where
+                            (.. "source '" source "' has no workflow '" wid "'"))))))
           (not (. workflows id))
           (report :error where (.. "unknown workflow '" id "'"))))
 
@@ -91,8 +125,11 @@
 nil when unknown."
       (if (= (type step.outputs) :table) (keys-of step.outputs)
           (= (type step.workflowId) :string)
-          (when (not (external? step.workflowId))
-            (keys-of (?. workflows step.workflowId :outputs))) {}))
+          (let [wf (if (external? step.workflowId)
+                       (other-workflow step.workflowId)
+                       (. workflows step.workflowId))]
+            (when wf
+              (keys-of wf.outputs))) {}))
 
     (fn check-reference [scope where e]
       "Report what expression e refers to that doesn't exist."
@@ -344,10 +381,7 @@ data holding them."
                              (= (type d) :string)))))
             (report :error where "dependsOn must list workflow ids")
             (each [_ dep (ipairs (or wf.dependsOn []))]
-              (if (external? dep)
-                  (report :error where
-                          (.. "workflows of other Arazzo documents are not supported: "
-                              dep))
+              (if (external? dep) (check-workflow-id where dep)
                   (not (. workflows dep))
                   (report :error where
                           (.. "depends on unknown workflow '" dep "'")))))
@@ -393,13 +427,33 @@ data holding them."
             (do
               (tset seen wf.workflowId true)
               (check-workflow wf)))))
-    problems))
+    (values problems externals)))
 
-(fn check [doc clients ?supplied]
+(fn check [doc clients ?supplied ?opts]
   "What is wrong in Arazzo document doc, whose sources are clients, found
 without running it: [{:level :error|:warning :where :message}]. ?supplied:
 {:header {name true} :query {name true}}, the parameters every request gets
-anyway (from a profile), header names lowercased."
-  (checker doc clients (or ?supplied {})))
+anyway (from a profile), header names lowercased. ?opts are the run's options,
+to load the Arazzo documents doc's workflows come from (trust-sources, ssl…):
+their problems are reported too, each where starting with the source's name."
+  (let [opts (or ?opts {})
+        problems []
+        visited {}]
+    (fn visit [d c prefix]
+      (let [(found externals) (checker d c (or ?supplied {}) opts)]
+        (each [_ p (ipairs found)]
+          (when prefix
+            (set p.where (.. prefix " › " p.where)))
+          (table.insert problems p))
+        (each [_ e (ipairs externals)]
+          (when (not (. visited e.url))
+            (tset visited e.url true)
+            (visit e.doc e.clients
+                   (if prefix (.. prefix " › " e.name) e.name))))))
+
+    (match (arazzo.location doc)
+      url (tset visited url true))
+    (visit doc clients nil)
+    problems))
 
 {: check}

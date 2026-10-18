@@ -84,7 +84,11 @@ winning."
                  " must be an object with a file, like {\"file\": \"flow.yaml\"}")
              0))
     (when (not (or (= nil context.inputs) (object? context.inputs)))
-      (error (.. "config: arazzo " name ": inputs must be an object") 0)))
+      (error (.. "config: arazzo " name ": inputs must be an object") 0))
+    (when (not (or (= nil (. context :trust-sources))
+                   (= :boolean (type (. context :trust-sources)))))
+      (error (.. "config: arazzo " name ": trust-sources must be true or false")
+             0)))
   config)
 
 (fn check-profile [name profile]

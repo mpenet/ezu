@@ -307,9 +307,10 @@ another origin); files directly."
                                     client-opts.authorize)})
         (ezu.load-schema location opts))))
 
-(fn run-options [{: profile-name : profile} p env]
+(fn run-options [{: profile-name : profile : named} p env]
   "The options of a workflow run with the context's profile: its clients'
-options, and how to load its sources."
+options, and how to load its sources. Arazzo sources are loaded from anywhere
+with --trust-sources, or trust-sources in the document's configuration."
   (let [
         ;; merged pages would change what step expressions like $response.body#/0 refer to
         p (doto (collect [k v (pairs p)] k v)
@@ -318,6 +319,10 @@ options, and how to load its sources."
         run-opts (client-options profile-name profile p env.config
                                  env.transport)]
     (set run-opts.load-schema (source-schema-loader env run-opts verbose))
+    (set run-opts.trust-sources
+         (or (= true p.trust-sources) (= true (?. named :trust-sources))))
+    ;; each OpenAPI source is built once, whichever documents use it
+    (set run-opts.source-clients {})
     run-opts))
 
 (fn workflow-runner [{: doc : file &as context} p env ?reporter]
@@ -354,7 +359,7 @@ without running it; exit 1 when something is."
                   :query (or opts.implied-query {})}
         prefix (.. (or p.operation "") " ›")
         problems (icollect [_ problem (ipairs (arazzo-check.check doc clients
-                                                                  supplied))]
+                                                                  supplied opts))]
                    (when (or (not p.operation) (= problem.where p.operation)
                              (= (problem.where:sub 1 (length prefix)) prefix))
                      problem))

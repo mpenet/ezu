@@ -1836,6 +1836,77 @@ does, which a streaming transport hands over one by one."
                     (assert.is_truthy (r.err:find "--link needs a document named in the configuration"
                                                   1 true)))))))
 
+(describe "workflows of other Arazzo documents"
+          (fn []
+            (local json (require :ezu.json))
+
+            (fn index-file []
+              "An Arazzo file running fetchPet of cli-flow, named by its
+absolute path, so not next to it."
+              (let [file (.. (os.tmpname) ".json")]
+                (with-open [f (io.open file :w)]
+                  (f:write (json.encode {:arazzo "1.1.0"
+                                         :info {:title "index" :version "1"}
+                                         :sourceDescriptions [{:name "flows"
+                                                               :type "arazzo"
+                                                               :url (.. (os.getenv "PWD")
+                                                                        "/test/fixtures/cli-flow.arazzo.json")}]
+                                         :workflows [{:workflowId "pet"
+                                                      :steps [{:stepId "s"
+                                                               :workflowId "$sourceDescriptions.flows.fetchPet"
+                                                               :parameters [{:name "id"
+                                                                             :value "$inputs.id"}]}]
+                                                      :inputs {:type "object"
+                                                               :properties {:id {:type "string"}}}
+                                                      :outputs {:name "$steps.s.outputs.name"}}]})))
+                file))
+
+            (local routes
+                   {"GET https://api.test/pets/7" (respond 200 {:name "Rex"})})
+            (it "loads one elsewhere only when sources are trusted"
+                (fn []
+                  (let [file (index-file)
+                        refused (ezu-run ["az" file "pet" "id=7"] routes)
+                        trusted (ezu-run ["az"
+                                          file
+                                          "pet"
+                                          "id=7"
+                                          "--trust-sources"
+                                          "--output=yaml"]
+                                         routes)
+                        configured (with-config (doto (collect [k v (pairs config)]
+                                                        k
+                                                        v)
+                                                  (tset :arazzo
+                                                        {:index {:file file
+                                                                 :trust-sources true}}))
+                                     #(ezu-run ["az"
+                                                "index"
+                                                "pet"
+                                                "id=7"
+                                                "--output=yaml"]
+                                               routes))]
+                    (os.remove file)
+                    (assert.are.equal 1 refused.code)
+                    (assert.is_truthy (refused.err:find "Arazzo source 'flows' is not next to the document"
+                                                        1 true)
+                                      refused.err)
+                    (assert.are.equal 0 trusted.code trusted.err)
+                    (assert.are.equal "name: Rex" trusted.out)
+                    (assert.are.equal 0 configured.code configured.err)
+                    (assert.are.equal "name: Rex" configured.out))))
+            (it "wants trust-sources to be true or false"
+                (fn []
+                  (let [r (with-config (doto (collect [k v (pairs config)] k v)
+                                         (tset :arazzo
+                                               {:index {:file "x.json"
+                                                        :trust-sources "yes"}}))
+                            #(ezu-run ["az" "index"]))]
+                    (assert.are.equal 1 r.code)
+                    (assert.is_truthy (r.err:find "config: arazzo index: trust-sources must be true or false"
+                                                  1 true)
+                                      r.err))))))
+
 (describe "--check-response"
           (fn []
             (it "says nothing of a response that matches the spec"

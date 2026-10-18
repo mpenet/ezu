@@ -38,7 +38,7 @@ Operation names are the spec's `operationId`s in lowercase, dash-separated words
 
 ## Options
 
-Options go anywhere after the command. `--name=value` and `--name value` are equivalent, except for the field options (`--q.`, `--h.`, `--b.`, `--i.`, `--server.`, `--ssl.`), which take `NAME=VALUE` as one argument. `--` ends the options: everything after it is positional (for a path parameter starting with `-`). An unknown option, or one that doesn't apply to the command (`--profile` on `op`, `--select` on `az`), is an error.
+Options go anywhere after the command. `--name=value` and `--name value` are equivalent, except for the field options (`--q.`, `--h.`, `--b.`, `--server.`, `--ssl.`), which take `NAME=VALUE` as one argument. `--` ends the options: everything after it is positional (for a path parameter starting with `-`). An unknown option, or one that doesn't apply to the command (`--profile` on `op`, `--select` on `az`), is an error.
 
 ## Operations (`op`)
 
@@ -78,7 +78,7 @@ Options go anywhere after the command. `--name=value` and `--name value` are equ
 
 ## Workflows (`az`)
 
-`az` takes `--help`, `--output`, `--no-color`, `-v`, `--no-validate`, `--timeout`, the retry options, `--base-url`, `--server-index`, `--server.` and `--ssl.` as above; `-d` and `--b.` set workflow inputs. And:
+`az` takes `--help`, `--output`, `--no-color`, `-v`, `--no-validate`, `--timeout`, the retry options, `--base-url`, `--server-index`, `--server.` and `--ssl.` as above. And:
 
 | Option | Description |
 |--------|-------------|
@@ -87,6 +87,7 @@ Options go anywhere after the command. `--name=value` and `--name value` are equ
 | `--profile=NAME` | Profile to authenticate with |
 | `--arazzo-output=MODE` | `final` (default), `steps`, `progress` or `full`; see [Output modes](arazzo.md#output-modes) |
 | `--max-gotos=N` | Most jumps to a single step before the workflow aborts (default 50) |
+| `--trust-sources` | Load Arazzo sources from anywhere, not only next to the document; see [Workflows of other documents](arazzo.md#workflows-of-other-documents) |
 | `--check` | Check the document, or one workflow, against its sources without running it; see [Checking a document](arazzo.md#checking-a-document) |
 | `--link` | Print how to make a named document a command of its own; see [A document as its own command](arazzo.md#a-document-as-its-own-command) |
 

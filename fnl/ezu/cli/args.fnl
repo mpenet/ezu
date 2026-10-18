@@ -224,6 +224,10 @@
          :key :check
          :scope :az
          :help "Check the document against its sources without running it"}
+        {:names ["--trust-sources"]
+         :key :trust-sources
+         :scope :az
+         :help "Load Arazzo sources from anywhere, not only next to the document"}
         {:names ["--max-gotos"]
          :key :max-gotos
          :value :number

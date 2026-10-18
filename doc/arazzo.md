@@ -135,7 +135,7 @@ $ ezu az flows.yaml --check
 2 errors, 1 warning
 ```
 
-It finds steps calling operations or workflows that don't exist; required parameters left out and parameters the operation doesn't declare (a warning); a body missing or not expected; references to steps, outputs, inputs, workflows, sources and components that don't exist; runtime expressions ezu doesn't know; conditions, regular expressions and JSONPath queries that can't be evaluated (unless they embed `{$expressions}`, only known when running); actions going to unknown steps or workflows. Parameters the profile adds to every request (its headers, query and authentication) count as given; header names match whatever their case, and `Accept`, `Content-Type` and `Authorization` header parameters are left out, as OpenAPI says. Workflows of other Arazzo documents (`$sourceDescriptions.NAME.ID`) are reported, since ezu doesn't run them. With a workflow id, it reports that workflow's problems only, its steps' included. ezu exits 1 when it finds an error, 0 otherwise.
+It finds steps calling operations or workflows that don't exist; required parameters left out and parameters the operation doesn't declare (a warning); a body missing or not expected; references to steps, outputs, inputs, workflows, sources and components that don't exist; runtime expressions ezu doesn't know; conditions, regular expressions and JSONPath queries that can't be evaluated (unless they embed `{$expressions}`, only known when running); actions going to unknown steps or workflows. Parameters the profile adds to every request (its headers, query and authentication) count as given; header names match whatever their case, and `Accept`, `Content-Type` and `Authorization` header parameters are left out, as OpenAPI says. Workflows of [other Arazzo documents](#workflows-of-other-documents) must exist there, and those documents are checked too, their problems under the source's name (`common › instance-id › step find: …`). With a workflow id, it reports that workflow's problems only, its steps' included. ezu exits 1 when it finds an error, 0 otherwise.
 
 ## Named workflow documents
 
@@ -158,6 +158,7 @@ The configuration's `arazzo` section names documents and attaches a profile and 
 | `file` | Path or URL of the document |
 | `profile` | Profile whose authentication, headers, TLS and server settings apply to every request |
 | `inputs` | Default inputs |
+| `trust-sources` | `true` to load [Arazzo sources](#workflows-of-other-documents) from anywhere, not only next to the document |
 
 `--profile=NAME` uses another profile for one run. `base-url` and `server-index` are refused when the document has several OpenAPI sources, since they would be ambiguous; server variables go to the sources that declare them.
 
@@ -284,6 +285,28 @@ steps:
 ### Reuse and composition
 
 `components` holds reusable `parameters`, `successActions`, `failureActions` and input schemas; refer to them with `reference: $components.parameters.NAME` (a `value` next to it overrides the component's); input schemas can use `$ref`. Workflows listed in `dependsOn` run first, once each, with the same inputs, and their outputs are available as `$workflows.ID.outputs.NAME`. A step with `workflowId` runs another workflow as a step: its `parameters` are that workflow's inputs, and its criteria, actions and outputs work as for any step (a step without `outputs` exposes the workflow's outputs).
+
+### Workflows of other documents
+
+A source of `type: arazzo` is another Arazzo document, and `$sourceDescriptions.NAME.ID` one of its workflows, wherever a `workflowId` goes: a step, a `goto` or `retry` action, `dependsOn`. Shared steps (finding an id by name, waiting for a job) can live in one document that others use:
+
+```yaml
+sourceDescriptions:
+  - {name: common, url: common.arazzo.yaml, type: arazzo}
+workflows:
+  - workflowId: instance-stop
+    steps:
+      - stepId: find
+        workflowId: $sourceDescriptions.common.instance-id
+        parameters:
+          - name: instance
+            value: $inputs.instance
+      ...
+```
+
+The workflow runs in its own document: its sources, components and workflows are that document's, while the profile, server variables and other options are the run's. Each document and each OpenAPI source is loaded once per run, whichever documents use it, and a workflow that ends up running itself again, across documents, stops with `workflow cycle: …`. Progress and failures name it `common.instance-id`.
+
+A workflow document runs with your credentials, so ezu only loads Arazzo sources next to the document: a relative URL (`common.arazzo.yaml`, `lib/common.yaml`) that stays among local files, or on the same origin for a document fetched over HTTP, `$self` included. `--trust-sources`, or `trust-sources` in the [document's configuration](#named-workflow-documents), loads them from anywhere.
 
 ### Not supported
 

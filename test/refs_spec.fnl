@@ -152,13 +152,13 @@
 
 (describe "keywords next to a $ref"
           (fn []
-            (local root {:defs {:x {:type "object"
-                                    :description "theirs"
-                                    :required ["a"]}}})
+            (local root {:$defs {:x {:type "object"
+                                     :description "theirs"
+                                     :required ["a"]}}})
             (it "override the target's annotations, which stays as it was"
                 (fn []
                   (let [v (deref root
-                                 {:$ref "#/defs/x"
+                                 {:$ref "#/$defs/x"
                                   :description "mine"
                                   :title "X"})]
                     (assert.are.same {:type "object"
@@ -166,7 +166,7 @@
                                       :title "X"
                                       :required ["a"]}
                                      v)
-                    (assert.are.equal "theirs" root.defs.x.description))))
+                    (assert.are.equal "theirs" root.$defs.x.description))))
             (it "add the keywords the target lacks"
                 (fn []
                   (assert.are.same {:type "object"
@@ -174,18 +174,161 @@
                                     :required ["a"]
                                     :nullable true}
                                    (deref root
-                                          {:$ref "#/defs/x" :nullable true}))))
+                                          {:$ref "#/$defs/x" :nullable true}))))
             (it "apply with the target's when both have them"
                 (fn []
-                  (assert.are.same {:description "mine"
-                                    :allOf [{:type "object"
-                                             :description "mine"
-                                             :required ["a"]}
-                                            {:required ["b"]}]}
+                  (assert.are.same {:type "object"
+                                    :description "mine"
+                                    :required ["a"]
+                                    :allOf [{:type "array"}]}
                                    (deref root
-                                          {:$ref "#/defs/x"
+                                          {:$ref "#/$defs/x"
                                            :description "mine"
-                                           :required ["b"]}))))))
+                                           :type "array"}))))
+            (it "join required names and properties with the target's"
+                (fn []
+                  (let [root {:$defs {:x {:required ["a"]
+                                          :properties {:a {:type "string"}
+                                                       :b {:type "string"}}}}}
+                        v (deref root
+                                 {:$ref "#/$defs/x"
+                                  :required ["b" "a"]
+                                  :properties {:b {:type "integer"}
+                                               :c {:type "boolean"}}})]
+                    (assert.are.same {:required ["a" "b"]
+                                      :properties {:a {:type "string"}
+                                                   :b {:type "string"}
+                                                   :c {:type "boolean"}}
+                                      :allOf [{:properties {:b {:type "integer"}}}]}
+                                     v)
+                    (assert.are.same ["a"] root.$defs.x.required)
+                    (assert.is_nil root.$defs.x.properties.c))))
+            (it "give complete copies of a recursive target"
+                (fn []
+                  (for [_ 1 20]
+                    (let [root {:components {:schemas {:Node {:type "object"
+                                                              :title "Node"
+                                                              :x-a 1
+                                                              :x-b 2
+                                                              :x-c 3
+                                                              :required ["v"]
+                                                              :properties {:next {:$ref "#/components/schemas/Node"
+                                                                                  :description "next one"}}}}}}
+                          node (deref root {:$ref "#/components/schemas/Node"})
+                          next node.properties.next]
+                      (assert.are.same {:type "object"
+                                        :title "Node"
+                                        :description "next one"
+                                        :x-a 1
+                                        :x-b 2
+                                        :x-c 3
+                                        :required ["v"]}
+                                       (collect [k v (pairs next)]
+                                         (when (not= k :properties)
+                                           (values k v))))
+                      (assert.are.equal node.properties next.properties)
+                      (assert.are.equal next next.properties.next)
+                      (assert.is_nil node.description)))))
+            (it "apply to a ref that names a ref with keywords of its own"
+                (fn []
+                  (let [root {:components {:schemas {:Pet {:type "object"
+                                                           :properties {:name {:type "string"}}}
+                                                     :Alias {:$ref "#/components/schemas/Pet"
+                                                             :required ["age"]
+                                                             :properties {:age {:type "integer"}}}}}}
+                        v (deref root
+                                 {:alias {:$ref "#/components/schemas/Alias"}
+                                  :pet {:$ref "#/components/schemas/Pet"}})]
+                    (assert.are.same {:type "object"
+                                      :required ["age"]
+                                      :properties {:name {:type "string"}
+                                                   :age {:type "integer"}}}
+                                     v.alias)
+                    (assert.are.same {:type "object"
+                                      :properties {:name {:type "string"}}}
+                                     v.pet))))
+            (it "keep a recursive ref to a ref with keywords cyclic"
+                (fn []
+                  (let [root {:components {:schemas {:Pet {:type "object"
+                                                           :properties {:self {:$ref "#/components/schemas/Alias"}}}
+                                                     :Alias {:$ref "#/components/schemas/Pet"
+                                                             :title "Alias"}}}}
+                        v (deref root {:$ref "#/components/schemas/Alias"})]
+                    (assert.are.equal "Alias" v.title)
+                    (assert.are.equal v v.properties.self))))
+            (it "reject refs with keywords that only point at each other"
+                (fn []
+                  (let [root {:components {:schemas {:A {:$ref "#/components/schemas/B"
+                                                         :title "A"}
+                                                     :B {:$ref "#/components/schemas/A"
+                                                         :title "B"}}}}
+                        (ok err) (pcall deref root
+                                        {:$ref "#/components/schemas/A"})]
+                    (assert.is_false ok)
+                    (assert.is_truthy (: (tostring err) :find "circular $ref" 1
+                                         true)))))
+            (it "join a boolean schema with allOf"
+                (fn []
+                  (let [root {:components {:schemas {:Any true}}}]
+                    (assert.are.same {:allOf [true {:description "d"}]}
+                                     (deref root
+                                            {:$ref "#/components/schemas/Any"
+                                             :description "d"})))))
+            (it "apply in the schemas of parameters and Arazzo inputs"
+                (fn []
+                  (let [root {:components {:schemas {:S {:type "string"}}
+                                           :inputs {:I {:type "object"}}}
+                              :workflows [{:inputs {:$ref "#/components/inputs/I"
+                                                    :required ["x"]}}]}
+                        v (deref root
+                                 {:parameters [{:name "p"
+                                                :schema {:$ref "#/components/schemas/S"
+                                                         :maxLength 3}}]
+                                  :workflows root.workflows})]
+                    (assert.are.same {:type "string" :maxLength 3}
+                                     (. v.parameters 1 :schema))
+                    (assert.are.same {:type "object" :required ["x"]}
+                                     (. v.workflows 1 :inputs))
+                    (assert.are.same {:type "object" :required ["x"]}
+                                     (deref root (. root.workflows 1 :inputs))))))))
+
+(describe "keywords next to a $ref outside schemas"
+          (fn []
+            (local root
+                   {:components {:parameters {:P {:name "p"
+                                                  :in "query"
+                                                  :description "theirs"}}
+                                 :pathItems {:A {:summary "theirs"
+                                                 :get {:operationId "a"}
+                                                 :put {:operationId "p"}}}}})
+            (it "only replace summary and description"
+                (fn []
+                  (let [v (deref root
+                                 {:parameters [{:$ref "#/components/parameters/P"
+                                                :required true
+                                                :description "mine"}]})]
+                    (assert.are.same [{:name "p"
+                                       :in "query"
+                                       :description "mine"}]
+                                     v.parameters)
+                    (assert.are.equal "theirs"
+                                      root.components.parameters.P.description))))
+            (it "of a Path Item, win over the referenced item's"
+                (fn []
+                  (let [item {:$ref "#/components/pathItems/A"
+                              :summary "mine"
+                              :get {:operationId "b"}
+                              :post {:operationId "c"}}
+                        expected {:summary "mine"
+                                  :get {:operationId "b"}
+                                  :put {:operationId "p"}
+                                  :post {:operationId "c"}}]
+                    (assert.are.same expected
+                                     (. (deref root {:paths {"/x" item}})
+                                        :paths "/x"))
+                    (assert.are.same expected (deref root item))
+                    (assert.are.equal "a"
+                                      root.components.pathItems.A.get.operationId))))))
 
 (describe "refs edge cases"
           (fn []

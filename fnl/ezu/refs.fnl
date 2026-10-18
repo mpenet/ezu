@@ -64,21 +64,116 @@ a JSON Schema examples array, or an OpenAPI Example's value."
                     :writeOnly true
                     :$comment true})
 
-(fn with-siblings [target siblings]
-  "target with the keywords written next to the $ref naming it, as JSON Schema
-2020-12 applies them: annotations replace the target's, other keywords are
-added, and where both have one, both must hold (allOf). target stays as it is."
-  (let [merged (setmetatable (collect [k v (pairs target)] k v)
-                             (getmetatable target))
-        both {}]
+;; members whose value is one schema
+(local schema-keys {:items true
+                    :additionalItems true
+                    :additionalProperties true
+                    :unevaluatedItems true
+                    :unevaluatedProperties true
+                    :not true
+                    :if true
+                    :then true
+                    :else true
+                    :contains true
+                    :propertyNames true
+                    :contentSchema true
+                    :schema true})
+
+;; members whose value is a list of schemas
+(local schema-lists {:allOf true
+                     :anyOf true
+                     :oneOf true
+                     :prefixItems true
+                     :items true})
+
+(fn schema-position? [key parent grandparent]
+  "Whether the value at key (under parent, itself under grandparent) is a
+schema: a member of a map of schemas, the value of a keyword taking a schema
+(an OpenAPI Parameter's, Header's or Media Type's schema among them), an
+element of a list of schemas, or an Arazzo workflow's inputs."
+  (or (= true (. schema-maps parent))
+      (and (= true (. schema-keys key)) (not (. name-maps parent)))
+      (and (not= nil key) (not= nil (tonumber key))
+           (= true (. schema-lists parent)))
+      (and (= key :inputs) (= grandparent :workflows))
+      (and (= parent :inputs) (= grandparent :components))))
+
+;; maps of OpenAPI Path Items
+(local path-item-maps {:paths true :webhooks true :pathItems true})
+
+;; the members of a Path Item that are operations
+(local operations {:get true
+                   :put true
+                   :post true
+                   :delete true
+                   :options true
+                   :head true
+                   :patch true
+                   :trace true})
+
+(fn path-item-position? [key parent grandparent]
+  "Whether the value at key (under parent, under grandparent) is an OpenAPI
+Path Item: an entry of paths, webhooks or components.pathItems, or a
+Callback's expression."
+  (or (= true (. path-item-maps parent)) (= grandparent :callbacks)))
+
+(fn copy-table [t]
+  (setmetatable (collect [k v (pairs t)] k v) (getmetatable t)))
+
+(fn union [names more]
+  "The names of names, then those of more it lacks."
+  (let [out (json.array (icollect [_ n (ipairs names)] n))
+        seen (collect [_ n (ipairs names)] n
+               true)]
+    (each [_ n (ipairs more)]
+      (when (not (. seen n))
+        (tset seen n true)
+        (table.insert out n)))
+    out))
+
+(fn merge-schema [out siblings]
+  "Applies to out, a copy of a schema, the keywords written next to the $ref
+naming it, as JSON Schema 2020-12 does: annotations replace the schema's,
+other keywords are added, and where both have one, both must hold. required
+lists are joined; properties are joined, and where both name a property,
+both of its schemas must hold. What must hold besides goes in out's allOf."
+  (let [both {}]
     (each [k v (pairs siblings)]
-      (if (or (. annotations k) (= nil (. merged k))) (tset merged k v)
-          (not= v (. merged k)) (tset both k v)))
-    (if (next both)
-        (doto (collect [k v (pairs siblings)]
-                (when (. annotations k) (values k v)))
-          (tset :allOf (json.array [merged both])))
-        merged)))
+      (let [mine (. out k)]
+        (if (or (. annotations k) (= nil mine))
+            (tset out k v)
+            (and (= k :required) (= (type mine) :table) (= (type v) :table))
+            (tset out k (union mine v))
+            (and (= k :properties) (= (type mine) :table) (= (type v) :table))
+            (let [props (copy-table mine)
+                  clashes {}]
+              (each [name schema (pairs v)]
+                (if (= nil (. props name)) (tset props name schema)
+                    (not= schema (. props name)) (tset clashes name schema)))
+              (tset out k props)
+              (when (next clashes)
+                (tset both :properties clashes)))
+            (not= v mine)
+            (tset both k v))))
+    (when (next both)
+      (let [all (json.array (if (= (type out.allOf) :table)
+                                (icollect [_ s (ipairs out.allOf)] s)
+                                []))]
+        (table.insert all both)
+        (tset out :allOf all)))
+    out))
+
+(fn merge-into [out target kind siblings]
+  "Fills out with target and the keywords written next to the $ref naming it.
+In a schema they apply as JSON Schema does (merge-schema). A Path Item's own
+fields win over the referenced item's. Elsewhere, as an OpenAPI 3.1
+Reference Object says, only a summary and a description replace the
+target's; other keywords are ignored."
+  (each [k v (pairs target)]
+    (tset out k v))
+  (if (= kind :schema) (merge-schema out siblings)
+      (each [k v (pairs siblings)]
+        (tset out k v))))
 
 (fn pointer-keys [pointer]
   "The last three segments of a JSON pointer, unescaped, last first."
@@ -134,18 +229,33 @@ nowhere, or only at each other, raise."
         (let [ref (. value "$ref")]
           (when (= (type ref) :string) ref))))
 
+    (fn has-siblings? [value]
+      (accumulate [found false k (pairs value) &until found]
+        (not= k "$ref")))
+
     (var deref nil)
     ;; tables already copied during the current call, so that values that are
     ;; already cyclic are copied as cycles
     (var copies {})
+    ;; refs with keywords next to them, expanded during the current call, in
+    ;; the order they were met: {:out :target :kind :siblings}. Their target
+    ;; may still be being filled when they are met (recursive schemas), so
+    ;; they are filled once the call has expanded everything else
+    (var pending [])
+    (var pending-of {})
+    (var expand-ref nil)
 
     (fn resolve-ref [from ref ?key ?parent ?grandparent]
+      "(expansion name parent grandparent) of ref: name parent grandparent
+are the last keys of where its expansion is."
       ;; ?key ?parent ?grandparent: where the $ref is; the target's members
       ;; are data when either that place or the target's own says so
-      ;; follow refs to refs to the value they finally name
+      ;; follow refs to refs to the value they finally name, or to a ref with
+      ;; keywords next to it, which is expanded with them
       (var (target value key pointer) (ref-target from ref))
       (let [chain [key]]
-        (while (and (= nil (. cache key)) (ref-of value))
+        (while (and (= nil (. cache key)) (ref-of value)
+                    (not (has-siblings? value)))
           (let [next-ref (ref-of value)]
             (set (target value key pointer) (ref-target target next-ref))
             (when (accumulate [found false _ k (ipairs chain) &until found]
@@ -154,54 +264,125 @@ nowhere, or only at each other, raise."
                          key) 0))
             (table.insert chain key)))
         (let [cached (. cache key)
-              expanded (if (not= nil cached) cached
-                           (or (not= (type value) :table) (= value json.null))
-                           value ;; registered before it is filled, so recursion
-                           ;; comes back to this same table
-                           (let [out (setmetatable {} (getmetatable value))
-                                 (name parent grandparent) (pointer-keys pointer)]
+              (name parent grandparent) (pointer-keys pointer)
+              ;; registered before it is filled, so recursion comes back to
+              ;; this same table
+              expanded (if (not= nil cached) cached (ref-of value)
+                           (let [out {}]
                              (tset cache key out)
-                             (each [k v (pairs value)]
-                               (tset out k
-                                     (if (or (data? k name parent grandparent)
-                                             (data? k ?key ?parent ?grandparent))
-                                         v
-                                         (deref target v k name parent))))
-                             out))]
+                             (expand-ref target value name parent grandparent
+                                         out))
+                           (or (not= (type value) :table) (= value json.null))
+                           value (let [out (setmetatable {} (getmetatable value))]
+                                  (tset cache key out)
+                                  (each [k v (pairs value)]
+                                    (tset out k
+                                          (if (or (data? k name parent
+                                                         grandparent)
+                                                  (data? k ?key ?parent
+                                                         ?grandparent))
+                                              v
+                                              (deref target v k name parent))))
+                                  out))]
           (each [_ k (ipairs chain)]
             (tset cache k expanded))
-          expanded)))
+          (values expanded name parent grandparent))))
+
+    (set expand-ref (fn [from value ?key ?parent ?grandparent ?out]
+                      "The expansion of value, a $ref with keywords next to it at ?key
+(under ?parent, under ?grandparent); ?out, the table to fill when a table
+results. How the keywords apply depends on what the ref stands for: a schema
+when the ref, or what it names, is where a schema goes (schema-position?);
+else a Path Item when either is where a Path Item goes, or the keywords are
+operations; else another OpenAPI object (see merge-into)."
+                      (let [(target name parent grandparent) (resolve-ref from
+                                                                          (ref-of value)
+                                                                          ?key
+                                                                          ?parent
+                                                                          ?grandparent)
+                            kind (if (or (schema-position? ?key ?parent
+                                                           ?grandparent)
+                                         (schema-position? name parent
+                                                           grandparent))
+                                     :schema
+                                     (or (path-item-position? ?key ?parent
+                                                              ?grandparent)
+                                         (path-item-position? name parent
+                                                              grandparent)
+                                         (accumulate [found false k (pairs value)
+                                                      &until found]
+                                           (= true (. operations k))))
+                                     :path-item
+                                     :reference)
+                            siblings (collect [k v (pairs value)]
+                                       (when (and (not= k "$ref")
+                                                  (or (not= kind :reference)
+                                                      (= k :summary)
+                                                      (= k :description)))
+                                         (values k
+                                                 (if (data? k ?key ?parent
+                                                            ?grandparent)
+                                                     v
+                                                     (deref from v k ?key
+                                                            ?parent)))))]
+                        (if (= (type target) :boolean)
+                            ;; a boolean schema has no keywords to add to
+                            (if (and (= kind :schema) (next siblings))
+                                (doto (or ?out {})
+                                  (tset :allOf (json.array [target siblings])))
+                                target)
+                            (or (not= (type target) :table)
+                                (= target json.null))
+                            target
+                            (or ?out (next siblings))
+                            (let [out (setmetatable (or ?out {})
+                                                    (getmetatable target))
+                                  entry {: out : target : kind : siblings}]
+                              (table.insert pending entry)
+                              (tset pending-of out entry)
+                              out)
+                            target))))
+
+    (fn fill [entry]
+      "Fills entry's table, once its target, when that is another one being
+expanded, is filled."
+      (when (not entry.done)
+        (when entry.filling
+          (error "circular $ref: refs with keywords next to them name each other"
+                 0))
+        (set entry.filling true)
+        (let [target-entry (. pending-of entry.target)]
+          (when target-entry
+            (fill target-entry)))
+        (merge-into entry.out entry.target entry.kind entry.siblings)
+        (set entry.done true)))
 
     (set deref (fn [from value ?key ?parent ?grandparent]
-                 (match (ref-of value)
-                   ref (let [target (resolve-ref from ref ?key ?parent
-                                                 ?grandparent)
-                             siblings (collect [k v (pairs value)]
-                                        (when (not= k "$ref")
-                                          (values k
-                                                  (if (data? k ?key ?parent
-                                                             ?grandparent)
-                                                      v
-                                                      (deref from v k ?key
-                                                             ?parent)))))]
-                         (if (and (next siblings) (= (type target) :table)
-                                  (not= target json.null))
-                             (with-siblings target siblings)
-                             target))
-                   _ (if (or (not= (type value) :table) (= value json.null))
-                         value
-                         (. copies value)
-                         (. copies value)
-                         ;; the copy keeps the table's metatable (JSON arrays)
-                         (let [out (setmetatable {} (getmetatable value))]
-                           (tset copies value out)
-                           (each [k v (pairs value)]
-                             (tset out k
-                                   (if (data? k ?key ?parent ?grandparent) v
-                                       (deref from v k ?key ?parent))))
-                           out)))))
+                 (if (ref-of value)
+                     (if (has-siblings? value)
+                         (expand-ref from value ?key ?parent ?grandparent)
+                         (let [expanded (resolve-ref from (ref-of value) ?key
+                                                     ?parent ?grandparent)]
+                           expanded))
+                     (or (not= (type value) :table) (= value json.null))
+                     value
+                     (. copies value)
+                     (. copies value)
+                     ;; the copy keeps the table's metatable (JSON arrays)
+                     (let [out (setmetatable {} (getmetatable value))]
+                       (tset copies value out)
+                       (each [k v (pairs value)]
+                         (tset out k
+                               (if (data? k ?key ?parent ?grandparent) v
+                                   (deref from v k ?key ?parent))))
+                       out))))
     (fn [value]
       (set copies {})
-      (deref {: root :base opts.base} value))))
+      (set pending [])
+      (set pending-of {})
+      (let [out (deref {: root :base opts.base} value)]
+        (each [_ entry (ipairs pending)]
+          (fill entry))
+        out))))
 
 {: resolver}

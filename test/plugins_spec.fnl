@@ -148,6 +148,46 @@
                           (assert.is_truthy (: (tostring err) :find
                                                "access list" 1 true)))
                         (os.remove path)))))
+            (it "refuses a plugin in a directory whose access list lets others change it"
+                (fn []
+                  (let [dir (.. (os.tmpname) ".d")]
+                    (os.execute (.. "mkdir " dir " && chmod 700 " dir))
+                    (let [path (.. dir "/p.lua")]
+                      (with-open [f (io.open path :w)]
+                        (f:write lua-plugin))
+                      (os.execute (.. "chmod 600 " path))
+                      ;; macOS: let everyone replace files in dir, mode unchanged
+                      (let [granted (os.execute (.. "chmod +a 'group:everyone allow add_file,delete_child' "
+                                                    dir " 2>/dev/null"))
+                            (ok err) (pcall plugins.resolve-auth
+                                            {:plugins [path]} {:name "demo"})]
+                        (os.remove path)
+                        (os.remove dir)
+                        (when granted
+                          (assert.is_false ok)
+                          (assert.is_truthy (: (tostring err) :find
+                                               "access list" 1 true)
+                                            (tostring err))
+                          (assert.is_truthy (: (tostring err) :find dir 1 true))))))))
+            (it "accepts access lists that only deny"
+                (fn []
+                  (let [dir (.. (os.tmpname) ".d")]
+                    (os.execute (.. "mkdir " dir " && chmod 700 " dir))
+                    (let [path (.. dir "/p.lua")]
+                      (with-open [f (io.open path :w)]
+                        (f:write lua-plugin))
+                      (os.execute (.. "chmod 600 " path))
+                      ;; macOS home folders carry such an entry
+                      (let [granted (and (os.execute (.. "chmod +a 'group:everyone deny delete' "
+                                                         dir " 2>/dev/null"))
+                                         (os.execute (.. "chmod +a 'group:everyone deny write' "
+                                                         path " 2>/dev/null")))
+                            (ok err) (pcall plugins.resolve-auth
+                                            {:plugins [path]} {:name "demo"})]
+                        (os.remove path)
+                        (os.remove dir)
+                        (when granted
+                          (assert.is_true ok (tostring err))))))))
             (it "refuses relative plugin paths"
                 (fn []
                   (let [(ok err) (pcall plugins.resolve-auth

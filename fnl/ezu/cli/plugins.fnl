@@ -38,15 +38,46 @@
                        (.. (dirname current) "/" target)))))
   current)
 
-(fn access-list? [path mode]
-  "Whether path has an access list. ls marks one with + after the mode; on
-macOS, extended attributes take that place (@) and hide it, so the entries
-ls -le lists tell."
-  (or (= (mode:sub 11 11) "+")
-      (and (= (mode:sub 11 11) "@")
-           (not= nil (: (command-output (.. "ls -lden " (util.shell-quote path)
-                                            " 2>/dev/null"))
-                        :match "\n%s*%d+: ")))))
+(var user-name nil)
+
+(fn access-entries [path mode]
+  "The entries of path's access list, as {:who principal :allow boolean
+:rights {right true}}; [] when it has none; nil when it has one ls can't list.
+ls marks an access list with + after the mode; on macOS, extended attributes
+take that place (@) and hide it, so the entries ls -le lists tell. GNU ls has
+no -e: there a + gives nil."
+  (let [mark (mode:sub 11 11)
+        out (if (or (= mark "+") (= mark "@"))
+                (command-output (.. "ls -lde " (util.shell-quote path)
+                                    " 2>/dev/null"))
+                "")
+        entries (icollect [line (out:gmatch "[^\n]+")]
+                  (let [(who rest) (line:match "^%s*%d+:%s+(%S+)%s+(.*)$")]
+                    (when who
+                      {: who
+                       :allow (not= nil (rest:match "^%S*%s*allow%s"))
+                       :rights (collect [right (: (or (rest:match "(%S+)%s*$")
+                                                      "")
+                                                  :gmatch "[^,]+")]
+                                 right
+                                 true)})))]
+    (when (or (not= mark "+") (next entries))
+      entries)))
+
+(fn others-allowed? [entries rights]
+  "Whether an entry allows someone other than the user one of rights."
+  (when (not user-name)
+    (set user-name (: (command-output "id -un") :match "^(.-)%s*$")))
+  (accumulate [found false _ e (ipairs entries) &until found]
+    (and e.allow (not= e.who (.. "user:" user-name))
+         (accumulate [any false _ right (ipairs rights) &until any]
+           (= true (. e.rights right))))))
+
+;; the rights that let one add, replace or remove what a directory holds
+(local directory-change-rights [:add_file
+                                :add_subdirectory
+                                :delete_child
+                                :write])
 
 (fn others-can-change? [mode]
   "Whether a file or directory of mode can be changed by group or others:
@@ -72,9 +103,12 @@ credentials. Links are followed."
     (when (others-can-change? mode)
       (fail path (.. "can be changed by other users, who would get your credentials (chmod go-w "
                      file ")")))
-    (when (access-list? file mode)
-      (fail path
-            "has an access list, which may let other users change it: remove it"))
+    (let [entries (access-entries file mode)]
+      (when (or (not entries) (accumulate [any false _ e (ipairs entries)
+                                           &until any]
+                                e.allow))
+        (fail path
+              "has an access list, which may let other users change it: remove it")))
     ;; nor may anyone else replace it: no directory up to / is theirs to change
     (var dir (: (command-output (.. "cd " (util.shell-quote (dirname file))
                                     " 2>/dev/null && pwd -P"))
@@ -87,6 +121,12 @@ credentials. Links are followed."
           (fail path
                 (.. "is in " dir
                     ", which can be changed by other users, who would get your credentials")))
+        (let [entries (access-entries dir dir-mode)]
+          (when (or (not entries)
+                    (others-allowed? entries directory-change-rights))
+            (fail path
+                  (.. "is in " dir
+                      ", whose access list may let other users change it, who would get your credentials"))))
         (set dir (if (= dir "/") nil
                      (let [parent (dirname dir)]
                        (if (= parent "") "/" parent))))))))

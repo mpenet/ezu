@@ -34,6 +34,15 @@ Offer as few as the task needs: every tool's description and schema goes into th
 
 A document with [command words](arazzo.md#command-words) offers instead the workflows its words reach, those of the documents it mounts included, named by their words joined with `_`: `x-ezu-command: instance create` under the source mounted as `compute` is `workflow.compute_instance_create`. Each runs in its own document. Workflows without words (helpers) are not offered; a mounted document without command words offers all its workflows, by id (`workflow.compute_WORKFLOW-ID`). Mounted documents load at start, from next to the document unless its context sets `trust-sources` or `--trust-sources` is given. A workflow that [asks first](arazzo.md#asking-first) (`x-ezu-confirm`) is a write: an agent can't be asked, so it is offered only with `--allow-writes`.
 
+**Which workflows.** A whole command line can be hundreds of tools, more than an agent handles well. The document's `mcp.workflows` in the configuration lists exactly the ones to offer, writes included, by command words or workflow id, with `*` for any text:
+
+```json
+"arazzo": {"exo": {"file": ".../exoscale.arazzo.yaml", "profile": "exo",
+                    "mcp": {"workflows": ["compute instance *", "dns list", "dns show"]}}}
+```
+
+A name that matches nothing stops `ezu mcp`, as for `mcp.operations`.
+
 **Protocol.** ezu speaks MCP 2026-07-28, without sessions, and the earlier versions that open with `initialize` (2025-11-25, 2025-06-18, 2025-03-26, 2024-11-05), over stdio. It reads one JSON-RPC message (or batch) per line on stdin and writes the answers on stdout; logs go to stderr. It stops when stdin closes. External auth tools and the browser of OAuth flows never share its stdin or stdout.
 
 ## Options

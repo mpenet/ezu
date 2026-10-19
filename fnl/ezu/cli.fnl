@@ -1001,23 +1001,28 @@ JSON or YAML one); otherwise -d is sent as given, as JSON when it is JSON."
   (.. "^" (pick-values 1 (: (glob:gsub "[%^%$%(%)%%%.%[%]%+%-%?]" "%%%0") :gsub
                             "%*" ".*")) "$"))
 
-(fn listed-operations [c listed]
-  "The operations of c that listed names, as names or * patterns: an
-unknown name, or a pattern that matches nothing, is an error."
+(fn listed-entries [by-name listed setting kind]
+  "The values of by-name (name -> value) that listed names, as names or *
+patterns: an unknown name, or a pattern that matches nothing, is an error
+naming setting and kind."
   (let [chosen {}]
     (each [_ entry (ipairs listed)]
       (if (entry:find "*" 1 true)
           (let [pattern (name-pattern entry)
-                matched (icollect [name op (pairs c)]
+                matched (icollect [name v (pairs by-name)]
                           (when (name:match pattern)
-                            (tset chosen name op)
+                            (tset chosen name v)
                             name))]
             (when (= nil (next matched))
-              (die (.. "mcp.operations: " entry " matches no operation"))))
-          (tset chosen entry (or (. c entry)
-                                 (die (.. "unknown operation in mcp.operations: "
+              (die (.. setting ": " entry " matches no " kind))))
+          (tset chosen entry (or (. by-name entry)
+                                 (die (.. "unknown " kind " in " setting ": "
                                           entry))))))
-    (icollect [_ op (pairs chosen)] op)))
+    (icollect [_ v (pairs chosen)] v)))
+
+(fn listed-operations [c listed]
+  "The operations of c that listed names, as names or * patterns."
+  (listed-entries c listed "mcp.operations" :operation))
 
 (fn mcp-operations [c profile p]
   "The operations ezu mcp offers: those the profile's mcp.operations lists,
@@ -1082,7 +1087,8 @@ error for arguments the operation can't take and for HTTP errors."
   "[[tool call] ...] for the workflows of the Arazzo context or file
 p.arazzo, run with the context's profile, else the profile ezu mcp names; a
 document with command words offers those of it and of the documents it
-mounts, each run in its own document."
+mounts, each run in its own document. The context's mcp.workflows lists
+which, by command words or workflow id, * for any text."
   (let [positional (when (and p.schema (find-profile env.config p.schema))
                      p.schema)
         context (arazzo-context p.arazzo
@@ -1102,13 +1108,24 @@ mounts, each run in its own document."
                                                      (or (arazzo.location doc)
                                                          context.file)))
                                              p env)))
-                    (. runners doc))]
-    (icollect [_ {: doc :workflow wf : words} (ipairs (mcp.command-workflows context.doc
-                                                                             (source-loader context
-                                                                                            p
-                                                                                            env)))]
-      ;; one that asks a person first (x-ezu-confirm) is a write
-      (when (or p.allow-writes (= nil (. wf :x-ezu-confirm)))
+                    (. runners doc))
+        reachable (mcp.command-workflows context.doc
+                                         (source-loader context p env))
+        listed (?. context :named :mcp :workflows)
+        ;; the configuration's list, writes included, else all but the
+        ;; writes: those that ask a person first (x-ezu-confirm)
+        offered (if listed
+                    (listed-entries (collect [_ e (ipairs reachable)]
+                                      (if e.words (table.concat e.words " ")
+                                          e.workflow.workflowId)
+                                      e)
+                                    listed "mcp.workflows" :workflow)
+                    (icollect [_ e (ipairs reachable)]
+                      (when (or p.allow-writes
+                                (= nil (. e.workflow :x-ezu-confirm)))
+                        e)))]
+    (icollect [_ {: doc :workflow wf : words} (ipairs offered)]
+      (do
         (let [schema (arazzo.workflow-inputs doc wf)
               run (runner-of doc)]
           [(mcp.workflow-tool wf schema words)

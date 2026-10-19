@@ -2891,6 +2891,57 @@ commands, written to a new directory."
                       (assert.are.equal "{\"name\":\"Rex\"}"
                                         (. r.responses 2 :result :content 1
                                            :text))))))
+            (it "offers the workflows a document's configuration lists, writes included"
+                (fn []
+                  (let [json (require :ezu.json)
+                        dir (os.tmpname)
+                        pets {:arazzo "1.1.0"
+                              :info {:title "p" :version "1"}
+                              :workflows [{:workflowId "pet-get"
+                                           :x-ezu-command "pet get"
+                                           :steps []}
+                                          {:workflowId "pet-drop"
+                                           :x-ezu-command "pet drop"
+                                           :x-ezu-confirm "Drop it?"
+                                           :steps []}
+                                          {:workflowId "owner-get"
+                                           :x-ezu-command "owner get"
+                                           :steps []}]}
+                        names #(let [cfg (doto (collect [k v (pairs config)] k
+                                                 v)
+                                           (tset :arazzo
+                                                 {:pets {:file (.. dir
+                                                                   "/pets.json")
+                                                         :mcp {:workflows $}}}))]
+                                 (with-config cfg
+                                   #(mcp-run ["mcp" "--arazzo=pets"]
+                                             [list-tools])))]
+                    (os.remove dir)
+                    (os.execute (.. "mkdir -p '" dir "'"))
+                    (with-open [f (io.open (.. dir "/pets.json") :w)]
+                      (f:write (json.encode pets)))
+                    (let [exact (names ["pet get"])
+                          pattern (names ["pet *"])
+                          nothing (names ["cat *"])]
+                      (os.execute (.. "rm -rf '" dir "'"))
+                      (assert.are.same ["workflow.pet_get"] (tool-names exact))
+                      (assert.are.same ["workflow.pet_drop" "workflow.pet_get"]
+                                       (doto (tool-names pattern) (table.sort)))
+                      (assert.are.equal 1 nothing.code)
+                      (assert.is_truthy (nothing.err:find "mcp.workflows: cat * matches no workflow"
+                                                          1 true)
+                                        nothing.err)))))
+            (it "wants mcp.workflows to list names"
+                (fn []
+                  (let [r (with-config (doto (collect [k v (pairs config)] k v)
+                                         (tset :arazzo
+                                               {:pets {:file "x.json"
+                                                       :mcp {:workflows "pet *"}}}))
+                            #(ezu-run ["--version"]))]
+                    (assert.are.equal 1 r.code)
+                    (assert.is_truthy (r.err:find "config: arazzo pets: mcp.workflows must be a list of command words or workflow ids, * for any text"
+                                                  1 true)
+                                      r.err))))
             (it "shows its usage"
                 (fn []
                   (let [r (mcp-run ["mcp"] [])]

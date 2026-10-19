@@ -97,6 +97,18 @@ winning."
                    (= :boolean (type (. context :trust-sources)))))
       (error (.. "config: arazzo " name ": trust-sources must be true or false")
              0))
+    (let [listed (?. context :mcp :workflows)]
+      (when (not (or (= nil (. context :mcp))
+                     (and (object? context.mcp)
+                          (or (= nil listed)
+                              (and (= (type listed) :table)
+                                   (not (object? listed))
+                                   (accumulate [ok true _ w (ipairs listed)
+                                                &until (not ok)]
+                                     (= (type w) :string)))))))
+        (error (.. "config: arazzo " name
+                   ": mcp.workflows must be a list of command words or workflow ids, * for any text")
+               0)))
     (let [n (. context :max-gotos)]
       (when (not (or (= nil n) (and (= (math.type n) :integer) (> n 0))))
         (error (.. "config: arazzo " name

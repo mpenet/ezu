@@ -546,7 +546,183 @@
                     (assert.are.equal "workflow.a_b_c" t.name)
                     (assert.are.same {:type :object
                                       :additionalProperties false}
-                                     t.inputSchema))))))
+                                     t.inputSchema))))
+            (it "names a workflow with command words by them"
+                (fn []
+                  (let [t (mcp.workflow-tool {:workflowId "create"} nil
+                                             ["compute" "instance" "create"])]
+                    (assert.are.equal "workflow.compute_instance_create" t.name)
+                    (assert.are.equal "Arazzo workflow create" t.description))))))
+
+(fn write-docs [docs]
+  "Write docs, {file-name doc}, as JSON in a new directory; returns it."
+  (let [dir (os.tmpname)]
+    (os.remove dir)
+    (os.execute (.. "mkdir -p '" dir "'"))
+    (each [name doc (pairs docs)]
+      (with-open [f (io.open (.. dir "/" name) :w)]
+        (f:write (json.encode doc))))
+    dir))
+
+(fn remove-docs [dir docs]
+  (each [name (pairs docs)]
+    (os.remove (.. dir "/" name)))
+  (os.remove dir))
+
+(fn flow [id ?command ?extra]
+  (doto (collect [k v (pairs (or ?extra {}))]
+          k
+          v)
+    (tset :workflowId id)
+    (tset :x-ezu-command ?command)
+    (tset :steps [])))
+
+(local mounting-docs
+       {"index.json" {:arazzo "1.1.0"
+                      :info {:title "Cloud" :version "1"}
+                      :sourceDescriptions [{:name "compute"
+                                            :url "compute.json"
+                                            :type "arazzo"
+                                            :x-ezu-command "compute"}
+                                           {:name "plain"
+                                            :url "plain.json"
+                                            :type "arazzo"
+                                            :x-ezu-command "misc"}]
+                      :workflows [(flow "zones" "zone list")
+                                  (flow "index-helper")]}
+        "compute.json" {:arazzo "1.1.0"
+                        :info {:title "Compute" :version "1"}
+                        :sourceDescriptions [{:name "sks"
+                                              :url "sks.json"
+                                              :type "arazzo"
+                                              :x-ezu-command "sks"}]
+                        :workflows [(flow "instance-create" "instance create"
+                                          {:summary "Create an instance"
+                                           :inputs {:type :object
+                                                    :properties {:name {:type :string}}
+                                                    :required [:name]}
+                                           :outputs {:name "$inputs.name"}})
+                                    (flow "instance-id")]}
+        "sks.json" {:arazzo "1.1.0"
+                    :info {:title "SKS" :version "1"}
+                    ;; back to compute: offered once, where first reached
+                    :sourceDescriptions [{:name "compute"
+                                          :url "compute.json"
+                                          :type "arazzo"
+                                          :x-ezu-command "compute"}]
+                    :workflows [(flow "cluster-list" "cluster list")]}
+        "plain.json" {:arazzo "1.1.0"
+                      :info {:title "Plain" :version "1"}
+                      :workflows [(flow "a-flow")]}})
+
+(describe "mcp.command-workflows"
+          (fn []
+            (it "offers the workflows command words reach, mounted ones included, by their words"
+                (fn []
+                  (let [arazzo (require :ezu.arazzo)
+                        dir (write-docs mounting-docs)
+                        doc (arazzo.load-doc (.. dir "/index.json"))
+                        found (mcp.command-workflows doc
+                                                     (arazzo.source-loader {}))]
+                    (remove-docs dir mounting-docs)
+                    (assert.are.same [["compute" "instance" "create"]
+                                      ["compute" "sks" "cluster" "list"]
+                                      ["misc" "a-flow"]
+                                      ["zone" "list"]]
+                                     (icollect [_ e (ipairs found)] e.words))
+                    (assert.are.same ["instance-create"
+                                      "cluster-list"
+                                      "a-flow"
+                                      "zones"]
+                                     (icollect [_ e (ipairs found)]
+                                       e.workflow.workflowId))
+                    (assert.are.equal (.. dir "/compute.json")
+                                      (arazzo.location (. found 1 :doc)))
+                    (assert.are.equal (.. dir "/sks.json")
+                                      (arazzo.location (. found 2 :doc)))
+                    (assert.are.equal doc (. found 4 :doc)))))
+            (it "offers every workflow of a document without command words, without words"
+                (fn []
+                  (let [doc {:workflows [(flow "b") (flow "a")]}]
+                    (assert.are.same [{:workflow (. doc.workflows 1) : doc}
+                                      {:workflow (. doc.workflows 2) : doc}]
+                                     (mcp.command-workflows doc
+                                                            #(error "no sources"))))))
+            (it "loads only the sources next to the document, unless trusted"
+                (fn []
+                  (let [arazzo (require :ezu.arazzo)
+                        elsewhere (write-docs {"plain.json" (. mounting-docs
+                                                               "plain.json")})
+                        docs {"index.json" {:arazzo "1.1.0"
+                                            :info {:title "Far" :version "1"}
+                                            :sourceDescriptions [{:name "far"
+                                                                  :url (.. elsewhere
+                                                                           "/plain.json")
+                                                                  :type "arazzo"
+                                                                  :x-ezu-command "far"}]
+                                            :workflows []}}
+                        dir (write-docs docs)
+                        doc (arazzo.load-doc (.. dir "/index.json"))
+                        (ok err) (pcall mcp.command-workflows doc
+                                        (arazzo.source-loader {}))
+                        trusted (mcp.command-workflows doc
+                                                       (arazzo.source-loader {:trust-sources true}))]
+                    (remove-docs dir docs)
+                    (remove-docs elsewhere {"plain.json" true})
+                    (assert.is_false ok)
+                    (assert.is_truthy (: (tostring err) :find
+                                         "not next to the document" 1 true))
+                    (assert.are.same [["far" "a-flow"]]
+                                     (icollect [_ e (ipairs trusted)] e.words)))))
+            (it "serves the tools of mounted workflows, run in their own document"
+                (fn []
+                  (let [arazzo (require :ezu.arazzo)
+                        dir (write-docs mounting-docs)
+                        doc (arazzo.load-doc (.. dir "/index.json"))
+                        found (mcp.command-workflows doc
+                                                     (arazzo.source-loader {}))
+                        calls (collect [_ e (ipairs found)]
+                                (values (. (mcp.workflow-tool e.workflow nil
+                                                              e.words)
+                                           :name)
+                                        #(arazzo.run-workflow e.doc
+                                                              e.workflow.workflowId
+                                                              $ {})))
+                        handle (mcp.handler {:tools (icollect [_ e (ipairs found)]
+                                                      (mcp.workflow-tool e.workflow
+                                                                         (arazzo.workflow-inputs e.doc
+                                                                                                 e.workflow)
+                                                                         e.words))
+                                             :call (fn [name arguments]
+                                                     {:content [{:type :text
+                                                                 :text (json.encode (. ((. calls
+                                                                                           name) arguments)
+                                                                                       :outputs))}]
+                                                      :isError false})
+                                             :version "1"})
+                        listed (handle {:jsonrpc "2.0"
+                                        :id 1
+                                        :method "tools/list"
+                                        :params {:_meta modern}})
+                        called (handle {:jsonrpc "2.0"
+                                        :id 2
+                                        :method "tools/call"
+                                        :params {:_meta modern
+                                                 :name "workflow.compute_instance_create"
+                                                 :arguments {:name "web1"}}})]
+                    (remove-docs dir mounting-docs)
+                    (assert.are.same ["workflow.compute_instance_create"
+                                      "workflow.compute_sks_cluster_list"
+                                      "workflow.misc_a-flow"
+                                      "workflow.zone_list"]
+                                     (icollect [_ t (ipairs listed.result.tools)]
+                                       t.name))
+                    (assert.are.same {:type :object
+                                      :properties {:name {:type :string}}
+                                      :required [:name]}
+                                     (. listed.result.tools 1 :inputSchema))
+                    (assert.are.equal "{\"name\":\"web1\"}"
+                                      (. called.result.content 1 :text)))))))
 
 (describe "mcp fixes from review"
           (fn []

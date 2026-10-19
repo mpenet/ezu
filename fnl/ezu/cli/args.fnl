@@ -231,6 +231,7 @@
         {:names ["--trust-sources"]
          :key :trust-sources
          :scope :az
+         :also [:mcp]
          :help "Load Arazzo sources from anywhere, not only next to the document"}
         {:names ["--max-gotos"]
          :key :max-gotos

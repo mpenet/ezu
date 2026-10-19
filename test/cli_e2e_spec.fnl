@@ -2803,6 +2803,52 @@ commands, written to a new directory."
                       (os.remove file)
                       (assert.are.equal 1 r.code)
                       (assert.is_truthy (r.err:find "workflow.get_it" 1 true))))))
+            (it "offers the command words of a document and those it mounts"
+                (fn []
+                  (let [json (require :ezu.json)
+                        dir (os.tmpname)
+                        pets (with-open [f (io.open "test/fixtures/cli-flow.arazzo.json")]
+                               (json.decode (f:read :*a)))]
+                    (os.remove dir)
+                    (os.execute (.. "mkdir -p '" dir "'"))
+                    (set (. pets :sourceDescriptions 1 :url)
+                         (.. (os.getenv "PWD") "/test/fixtures/cli-api.json"))
+                    (set (. pets :workflows 1 :x-ezu-command) "pet get")
+                    (table.insert pets.workflows
+                                  {:workflowId "helper" :steps []})
+                    (table.insert pets.workflows
+                                  {:workflowId "pet-drop"
+                                   :x-ezu-command "pet drop"
+                                   :x-ezu-confirm "Drop it?"
+                                   :steps []})
+                    (with-open [f (io.open (.. dir "/pets.json") :w)]
+                      (f:write (json.encode pets)))
+                    (with-open [f (io.open (.. dir "/index.json") :w)]
+                      (f:write (json.encode {:arazzo "1.1.0"
+                                             :info {:title "i" :version "1"}
+                                             :sourceDescriptions [{:name "pets"
+                                                                   :url "pets.json"
+                                                                   :type "arazzo"
+                                                                   :x-ezu-command "pets"}]
+                                             :workflows []})))
+                    (let [r (mcp-run ["mcp" (.. "--arazzo=" dir "/index.json")]
+                                     [list-tools
+                                      (call 2 "workflow.pets_pet_get" {:id "7"})]
+                                     {"GET https://api.test/pets/7" (respond 200
+                                                                             {:name "Rex"})})]
+                      (let [writes (mcp-run ["mcp"
+                                             (.. "--arazzo=" dir "/index.json")
+                                             "--allow-writes"]
+                                            [list-tools])]
+                        (os.execute (.. "rm -rf '" dir "'"))
+                        ;; a workflow that asks first is a write
+                        (assert.are.same ["workflow.pets_pet_drop"
+                                          "workflow.pets_pet_get"]
+                                         (doto (tool-names writes) (table.sort))))
+                      (assert.are.same ["workflow.pets_pet_get"] (tool-names r))
+                      (assert.are.equal "{\"name\":\"Rex\"}"
+                                        (. r.responses 2 :result :content 1
+                                           :text))))))
             (it "shows its usage"
                 (fn []
                   (let [r (mcp-run ["mcp"] [])]

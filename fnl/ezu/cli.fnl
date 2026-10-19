@@ -1044,29 +1044,50 @@ error for arguments the operation can't take and for HTTP errors."
 
 (fn workflow-tools [p env]
   "[[tool call] ...] for the workflows of the Arazzo context or file
-p.arazzo, run with the context's profile, else the profile ezu mcp names."
+p.arazzo, run with the context's profile, else the profile ezu mcp names; a
+document with command words offers those of it and of the documents it
+mounts, each run in its own document."
   (let [positional (when (and p.schema (find-profile env.config p.schema))
                      p.schema)
         context (arazzo-context p.arazzo
                                 (or (?. env.config :arazzo p.arazzo :profile)
                                     positional)
                                 p env)
-        run (workflow-runner context p env)]
-    (icollect [_ wf (ipairs (or context.doc.workflows []))]
-      (let [schema (arazzo.workflow-inputs context.doc wf)]
-        [(mcp.workflow-tool wf schema)
-         (fn [inputs]
-           (let [(object err) (pcall mcp.check-arguments inputs)
-                 errors (if (not object) [err] schema
-                            (validate.check schema inputs :inputs) (next inputs)
-                            ["the workflow takes no inputs"] [])]
-             (if (next errors) (tool-error (table.concat errors "\n"))
-                 (let [(ok result) (run wf inputs)]
-                   (if ok
-                       {:content [{:type :text
-                                   :text (json.encode (or result.outputs {}))}]
-                        :isError false}
-                       (tool-error (strip-location (tostring result))))))))]))))
+        ;; one runner per document: a workflow runs in its own
+        runners {}
+        runner-of (fn [doc]
+                    (when (not (. runners doc))
+                      (tset runners doc
+                            (workflow-runner (doto (collect [k v (pairs context)]
+                                                     k
+                                                     v)
+                                               (tset :doc doc)
+                                               (tset :file
+                                                     (or (arazzo.location doc)
+                                                         context.file)))
+                                             p env)))
+                    (. runners doc))]
+    (icollect [_ {: doc :workflow wf : words} (ipairs (mcp.command-workflows context.doc
+                                                                             (source-loader context
+                                                                                            p
+                                                                                            env)))]
+      ;; one that asks a person first (x-ezu-confirm) is a write
+      (when (or p.allow-writes (= nil (. wf :x-ezu-confirm)))
+        (let [schema (arazzo.workflow-inputs doc wf)
+              run (runner-of doc)]
+          [(mcp.workflow-tool wf schema words)
+           (fn [inputs]
+             (let [(object err) (pcall mcp.check-arguments inputs)
+                   errors (if (not object) [err] schema
+                              (validate.check schema inputs :inputs)
+                              (next inputs) ["the workflow takes no inputs"] [])]
+               (if (next errors) (tool-error (table.concat errors "\n"))
+                   (let [(ok result) (run wf inputs)]
+                     (if ok
+                         {:content [{:type :text
+                                     :text (json.encode (or result.outputs {}))}]
+                          :isError false}
+                         (tool-error (strip-location (tostring result))))))))])))))
 
 (fn run-mcp [p env]
   (when (or p.operation (next p.path-params))

@@ -3,6 +3,8 @@
 (local json (require :ezu.json))
 (local http (require :ezu.http))
 (local validate (require :ezu.validate))
+(local arazzo (require :ezu.arazzo))
+(local commands (require :ezu.arazzo.commands))
 
 (fn object? [v]
   (and (= (type v) :table) (not= v json.null) (not (json.array? v))))
@@ -268,14 +270,15 @@ opts.supplied-query) are left out."
        :inputSchema input
        :annotations (annotations (op.method:upper))})))
 
-(fn workflow-tool [wf inputs-schema]
+(fn workflow-tool [wf inputs-schema ?words]
   "The MCP tool definition of Arazzo workflow wf, whose inputs (JSON Schema,
-refs resolved) are inputs-schema."
-  (let [parts [(.. "Arazzo workflow " wf.workflowId)]]
+refs resolved) are inputs-schema, named by its command ?words, else its id."
+  (let [parts [(.. "Arazzo workflow " wf.workflowId)]
+        name (if ?words (table.concat ?words "_") wf.workflowId)]
     (each [_ text (ipairs [wf.summary wf.description])]
       (when (and (= (type text) :string) (not= text ""))
         (table.insert parts text)))
-    {:name (.. "workflow." (pick-values 1 (wf.workflowId:gsub "[^%w_.-]" "_")))
+    {:name (.. "workflow." (pick-values 1 (name:gsub "[^%w_.-]" "_")))
      :title wf.summary
      :description (table.concat parts "\n\n")
      :inputSchema (if (= (type inputs-schema) :table)
@@ -286,6 +289,56 @@ refs resolved) are inputs-schema."
                    :destructiveHint true
                    :idempotentHint false
                    :openWorldHint true}}))
+
+(fn sorted-words [node]
+  (doto (icollect [w (pairs node.children)] w)
+    (table.sort)))
+
+(fn command-workflows [doc load]
+  "The workflows ezu mcp offers of doc, loading the documents it mounts with
+(load doc source): [{:workflow :doc :words}], doc being the one the workflow
+is in. With command words, those the words reach, mounted documents included,
+by words: helpers without words are left out, and a mounted document without
+command words offers its workflows by id. Without, doc's workflows, without
+words. A document mounted inside itself is offered once."
+  (if (not (commands.commands? doc))
+      (icollect [_ wf (ipairs (or doc.workflows []))]
+        {:workflow wf : doc})
+      (let [found []
+            add-mounted (fn [mounted words]
+                          (each [_ wf (ipairs (or mounted.workflows []))]
+                            (table.insert found
+                                          {:workflow wf
+                                           :doc mounted
+                                           :words (doto (icollect [_ w (ipairs words)]
+                                                          w)
+                                                    (table.insert (tostring wf.workflowId)))})))]
+        (fn walk [node words seen]
+          (each [_ w (ipairs (sorted-words node))]
+            (let [child (. node.children w)
+                  words (doto (icollect [_ x (ipairs words)] x)
+                          (table.insert w))]
+              (if child.mount
+                  (let [mounted (load child.doc child.mount)
+                        here (or (arazzo.location mounted) mounted)]
+                    (when (not (. seen here))
+                      (if (commands.commands? mounted)
+                          (walk (. (commands.resolve mounted [] load) :node)
+                                words
+                                (doto (collect [k v (pairs seen)] k v)
+                                  (tset here true)))
+                          (add-mounted mounted words))))
+                  (do
+                    (when child.workflow
+                      (table.insert found
+                                    {:workflow child.workflow
+                                     :doc child.doc
+                                     : words}))
+                    (walk child words seen))))))
+
+        (walk (. (commands.resolve doc [] load) :node) []
+              {(or (arazzo.location doc) doc) true})
+        found)))
 
 (fn argument-errors [op params arguments]
   "Required arguments missing, and parameter values their schemas refuse."
@@ -510,6 +563,7 @@ A batch (an array of messages) gets an array of responses."
 {: json-schema
  : tool
  : workflow-tool
+ : command-workflows
  : request
  : check-arguments
  : handler

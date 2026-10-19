@@ -32,13 +32,16 @@ Offer as few as the task needs: every tool's description and schema goes into th
 
 **Workflows.** `--arazzo=NAME` adds the workflows of an Arazzo context or file as tools named `workflow.WORKFLOW-ID`, with the workflow's inputs as arguments. They run with the context's profile, else the profile `ezu mcp` names, and return the workflow's outputs. `ezu mcp --arazzo=NAME` without a profile offers the workflows alone. They are offered whatever they do: list them in the context only if the agent may run them.
 
+A document with [command words](arazzo.md#command-words) offers instead the workflows its words reach, those of the documents it mounts included, named by their words joined with `_`: `x-ezu-command: instance create` under the source mounted as `compute` is `workflow.compute_instance_create`. Each runs in its own document. Workflows without words (helpers) are not offered; a mounted document without command words offers all its workflows, by id (`workflow.compute_WORKFLOW-ID`). Mounted documents load at start, from next to the document unless its context sets `trust-sources` or `--trust-sources` is given. A workflow that [asks first](arazzo.md#asking-first) (`x-ezu-confirm`) is a write: an agent can't be asked, so it is offered only with `--allow-writes`.
+
 **Protocol.** ezu speaks MCP 2026-07-28, without sessions, and the earlier versions that open with `initialize` (2025-11-25, 2025-06-18, 2025-03-26, 2024-11-05), over stdio. It reads one JSON-RPC message (or batch) per line on stdin and writes the answers on stdout; logs go to stderr. It stops when stdin closes. External auth tools and the browser of OAuth flows never share its stdin or stdout.
 
 ## Options
 
 | Option | Description |
 |--------|-------------|
-| `--allow-writes` | Offer every operation, not only GET, HEAD and OPTIONS |
+| `--allow-writes` | Offer every operation, not only GET, HEAD and OPTIONS, and the workflows that ask first |
+| `--trust-sources` | Load the Arazzo documents a workflow document mounts or uses from anywhere |
 | `--arazzo=NAME` | Also offer the workflows of an Arazzo context or file |
 
 `mcp` also takes `-v`, `--timeout`, the retry options, `--max-pages`, `--no-paginate`, `--base-url`, `--server-index`, `--server.`, `--ssl.`, `--reload` and `--cache-ttl` as above.

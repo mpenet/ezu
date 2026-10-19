@@ -2,7 +2,7 @@
 
 All notable changes to ezu, named atlas until 1.0.0-beta7. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 
-## [1.0.0-beta9] - 2026-10-20
+## [1.0.0-beta9] - 2026-10-19
 
 ### Added
 

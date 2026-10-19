@@ -167,7 +167,7 @@
         {:names ["--reload"]
          :key :reload
          :scope :op
-         :also [:mcp]
+         :also [:mcp :az]
          :help "Re-fetch and re-cache the schema"}
         {:names ["--ignore-status"]
          :key :ignore-status
@@ -195,7 +195,7 @@
          :key :cache-ttl
          :value :number
          :scope :op
-         :also [:mcp]
+         :also [:mcp :az]
          :help "Schema cache TTL in seconds (default: 3600)"}
         {:names ["--profile"]
          :key :profile

@@ -78,7 +78,7 @@ Options go anywhere after the command. `--name=value` and `--name value` are equ
 
 ## Workflows (`az`)
 
-`az` takes `--help`, `--output`, `--select` (in the workflow's outputs), `--no-color`, `-v`, `--no-validate`, `--timeout`, the retry options, `--base-url`, `--server-index`, `--server.` and `--ssl.` as above. And:
+`az` takes `--help`, `--output`, `--select` (in the workflow's outputs), `--reload` and `--cache-ttl` (for the specs its sources fetch), `--no-color`, `-v`, `--no-validate`, `--timeout`, the retry options, `--base-url`, `--server-index`, `--server.` and `--ssl.` as above. And:
 
 | Option | Description |
 |--------|-------------|

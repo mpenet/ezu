@@ -291,23 +291,30 @@ indexes of those given after --), typed by the workflow's inputs schema."
   (let [transport (or env.transport http-mod.request)]
     (if verbose (wrap-log-request transport) transport)))
 
-(fn source-schema-loader [env client-opts verbose]
+(fn source-schema-loader [env client-opts verbose ?caching]
   "Loader for source schemas: URLs through the transport, getting credentials
 (client-opts :auth-headers and :authorize) only after answering 401/403, and
 never for a document whose loader options say :credentials false (a $ref to
-another origin); files directly."
+another origin); files directly. With ?caching ({:ttl :reload :cache}, as for
+op's spec), from the spec cache when fresh."
   (fn [location opts]
     (if (location:match "^https?://")
-        (fetch-schema location
-                      {:transport (schema-transport env verbose)
-                       :headers opts.headers
-                       :ssl opts.ssl
-                       :timeout opts.timeout
-                       :base-url client-opts.base-url
-                       :auth-headers (when (not= false opts.credentials)
-                                       client-opts.auth-headers)
-                       :authorize (when (not= false opts.credentials)
-                                    client-opts.authorize)})
+        (let [fetch-opts {:transport (schema-transport env verbose)
+                          :headers opts.headers
+                          :ssl opts.ssl
+                          :timeout opts.timeout
+                          :base-url client-opts.base-url
+                          :auth-headers (when (not= false opts.credentials)
+                                          client-opts.auth-headers)
+                          :authorize (when (not= false opts.credentials)
+                                       client-opts.authorize)}]
+          (if ?caching
+              (load-schema-cached location
+                                  (doto fetch-opts
+                                    (tset :ttl ?caching.ttl)
+                                    (tset :reload ?caching.reload)
+                                    (tset :cache ?caching.cache)))
+              (fetch-schema location fetch-opts)))
         (ezu.load-schema location opts))))
 
 (fn trust-sources? [named p]
@@ -326,7 +333,12 @@ with --trust-sources, or trust-sources in the document's configuration."
         verbose (. (display-options profile p env.config) :verbose)
         run-opts (client-options profile-name profile p env.config
                                  env.transport)]
-    (set run-opts.load-schema (source-schema-loader env run-opts verbose))
+    (set run-opts.load-schema
+         (source-schema-loader env run-opts verbose
+                               {:ttl (or p.cache-ttl (?. profile :cache-ttl)
+                                         3600)
+                                :reload p.reload
+                                :cache env.schema-cache}))
     (set run-opts.trust-sources (trust-sources? named p))
     ;; each OpenAPI source is built once, whichever documents use it
     (set run-opts.source-clients {})

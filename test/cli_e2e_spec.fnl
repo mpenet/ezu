@@ -2096,6 +2096,46 @@ commands, written to a new directory."
                     (assert.are.equal "✓ 2 documents, 1 workflow, 1 step: nothing wrong found"
                                       r.out))))))
 
+(describe "workflow sources fetched from a URL"
+          (fn []
+            (it "come from the spec cache, until --reload"
+                (fn []
+                  (let [json (require :ezu.json)
+                        spec (with-open [f (io.open "test/fixtures/cli-api.json")]
+                               (f:read :*a))
+                        ;; a URL of its own: the cache outlives each test
+                        url (.. "https://specs.test/" (os.time)
+                                (math.random 1000000) "/api.json")
+                        flow (with-open [f (io.open "test/fixtures/cli-flow.arazzo.json")]
+                               (json.decode (f:read :*a)))
+                        file (.. (os.tmpname) ".json")
+                        ;; fresh for each run: a run may change the responses
+                        routes #{(.. "GET " url) (respond 200
+                                                          (json.decode spec))
+                                 "GET https://api.test/pets/7" (respond 200
+                                                                        {:name "Rex"})}
+                        fetches #(accumulate [n 0 _ r (ipairs $.requests)]
+                                   (if (= r.url url) (+ n 1) n))]
+                    (set (. flow :sourceDescriptions 1 :url) url)
+                    (with-open [f (io.open file :w)]
+                      (f:write (json.encode flow)))
+                    (let [first (ezu-run ["az" file "fetchPet" "id=7"] (routes))
+                          second (ezu-run ["az" file "fetchPet" "id=7"]
+                                          (routes))
+                          reloaded (ezu-run ["az"
+                                             file
+                                             "fetchPet"
+                                             "id=7"
+                                             "--reload"]
+                                            (routes))]
+                      (os.remove file)
+                      (assert.are.equal 0 first.code first.err)
+                      (assert.are.equal 1 (fetches first))
+                      (assert.are.equal 0 second.code second.err)
+                      (assert.are.equal 0 (fetches second))
+                      (assert.are.equal 0 reloaded.code reloaded.err)
+                      (assert.are.equal 1 (fetches reloaded))))))))
+
 (describe "confirming a workflow"
           (fn []
             (local json (require :ezu.json))

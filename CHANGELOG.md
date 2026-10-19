@@ -11,6 +11,10 @@ All notable changes to ezu, named atlas until 1.0.0-beta7. The format follows [K
 - `arazzo-output` on a named workflow document in the configuration sets how its runs print (`progress`, say); `--arazzo-output` still wins.
 - More options can be set in the configuration: `timing` (top level or profile), `no-paginate` and `check-response` (profile), and `max-gotos` (named workflow document). The command line still wins; the configuration documents which options stay on it, and why.
 
+### Fixed
+
+- `az` fetched the OpenAPI specs of a document's sources on every run, never using the spec cache `op` uses: with the Exoscale example, that was about 0.6 s of each command's 0.7 s. They are now cached for an hour, as `op`'s are, and `--reload` and `--cache-ttl` work on `az`.
+
 ## [1.0.0-beta8] - 2026-10-19
 
 ### Changed

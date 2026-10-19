@@ -2,7 +2,7 @@
 
 All notable changes to ezu, named atlas until 1.0.0-beta7. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.0.0-beta9] - 2026-10-20
 
 ### Added
 
@@ -315,6 +315,7 @@ The first beta with release binaries: 1.0.0-beta1 was published without them, an
 
 Earlier releases are described on the [releases page](https://github.com/mpenet/ezu/releases).
 
+[1.0.0-beta9]: https://github.com/mpenet/ezu/compare/v1.0.0-beta8...v1.0.0-beta9
 [1.0.0-beta8]: https://github.com/mpenet/ezu/compare/v1.0.0-beta7...v1.0.0-beta8
 [1.0.0-beta7]: https://github.com/mpenet/ezu/compare/v1.0.0-beta6...v1.0.0-beta7
 [1.0.0-beta6]: https://github.com/mpenet/ezu/compare/v1.0.0-beta5...v1.0.0-beta6

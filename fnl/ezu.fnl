@@ -386,7 +386,7 @@ base-url defaults to schema.servers[1].url with :server-vars applied"
         (add name entry)))
     client))
 
-{:version "1.0.0-beta8"
+{:version "1.0.0-beta9"
  :client client
  :load-schema load-schema
  :parse-schema parse-schema

@@ -82,9 +82,9 @@ does, which a streaming transport hands over one by one."
     (assert ok result)
     result))
 
-(fn ezu-run [args ?routes ?program]
-  "Run the CLI in-process, as ?program (default ezu); returns {:code :out :err
-:requests}."
+(fn ezu-run [args ?routes ?program ?env]
+  "Run the CLI in-process, as ?program (default ezu), with ?env added to its
+environment; returns {:code :out :err :requests}."
   (let [(transport requests) (routes-transport (or ?routes {}))
         out []
         err []
@@ -106,9 +106,11 @@ does, which a streaming transport hands over one by one."
                                    self)))
                     :flush #true})
     (let [(ok code) (pcall cli.run args
-                           {: transport
-                            :config current-config
-                            :program (or ?program "/usr/local/bin/ezu")})]
+                           (doto {: transport
+                                  :config current-config
+                                  :program (or ?program "/usr/local/bin/ezu")}
+                             (#(each [k v (pairs (or ?env {}))]
+                                 (tset $ k v)))))]
       (set _G.print real-print)
       (set io.stderr real-stderr)
       (set io.stdout real-stdout)
@@ -2093,6 +2095,71 @@ commands, written to a new directory."
                     (assert.are.equal 0 r.code (.. r.out r.err))
                     (assert.are.equal "✓ 2 documents, 1 workflow, 1 step: nothing wrong found"
                                       r.out))))))
+
+(describe "confirming a workflow"
+          (fn []
+            (local json (require :ezu.json))
+
+            (fn confirm-file []
+              (let [flow (with-open [f (io.open "test/fixtures/cli-flow.arazzo.json")]
+                           (json.decode (f:read :*a)))
+                    file (.. (os.tmpname) ".json")]
+                (set (. flow :sourceDescriptions 1 :url)
+                     (.. (os.getenv "PWD") "/test/fixtures/cli-api.json"))
+                (set (. flow :workflows 1 :x-ezu-confirm)
+                     "Fetch pet {$inputs.id}?")
+                (with-open [f (io.open file :w)]
+                  (f:write (json.encode flow)))
+                file))
+
+            (local routes
+                   {"GET https://api.test/pets/7" (respond 200 {:name "Rex"})})
+
+            (fn run [args ?answer]
+              (let [file (confirm-file)
+                    asked []
+                    r (with-config (doto (collect [k v (pairs config)] k v)
+                                     (tset :arazzo {:c {:file file}}))
+                        #(ezu-run (doto ["az" "c" "fetchPet" "id=7"]
+                                    (#(each [_ a (ipairs args)]
+                                        (table.insert $ a))))
+                                  routes nil
+                                  (when ?answer
+                                    {:ask (fn [question]
+                                            (table.insert asked question)
+                                            ?answer)})))]
+                (os.remove file)
+                (values r asked)))
+
+            (it "asks first, and goes ahead on yes only"
+                (fn []
+                  (let [(yes asked) (run [] "y")
+                        (no) (run [] "n")]
+                    (assert.are.same ["Fetch pet 7? [y/N] "] asked)
+                    (assert.are.equal 0 yes.code yes.err)
+                    (assert.are.equal 1 (length yes.requests))
+                    (assert.are.equal 1 no.code)
+                    (assert.are.equal 0 (length no.requests))
+                    (assert.is_truthy (no.err:find "not confirmed" 1 true)
+                                      no.err))))
+            (it "says in the workflow's help that it asks first"
+                (fn []
+                  (let [(r) (run ["--help"])]
+                    (assert.are.equal 0 r.code r.err)
+                    (assert.is_truthy (r.out:find "Asks first: Fetch pet {$inputs.id}? (--yes answers yes)"
+                                                  1 true)
+                                      r.out))))
+            (it "goes ahead with --yes, and refuses without anyone to ask"
+                (fn []
+                  (let [(yes asked) (run ["--yes"] "n")
+                        (alone) (run [])]
+                    (assert.are.equal 0 yes.code yes.err)
+                    (assert.are.same [] asked)
+                    (assert.are.equal 1 alone.code)
+                    (assert.are.equal 0 (length alone.requests))
+                    (assert.is_truthy (alone.err:find "Fetch pet 7? Nobody to ask: add --yes to go ahead"
+                                                      1 true)
+                                      alone.err))))))
 
 (describe "settings in the configuration"
           (fn []

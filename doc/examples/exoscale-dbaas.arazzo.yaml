@@ -1852,6 +1852,7 @@ workflows:
 
   - workflowId: delete
     x-ezu-command: delete
+    x-ezu-confirm: "Delete database service {$inputs.service}?"
     summary: Delete a database service and wait until it is gone.
     x-ezu-args: [service]
     inputs:
@@ -4542,6 +4543,7 @@ workflows:
 
   - workflowId: connection-pool-delete
     x-ezu-command: connection-pool delete
+    x-ezu-confirm: "Delete connection pool {$inputs.pool} of {$inputs.service}?"
     summary: Delete a connection pool of a PostgreSQL service.
     x-ezu-args: [service, pool]
     inputs:
@@ -5086,6 +5088,7 @@ workflows:
 
   - workflowId: integration-delete
     x-ezu-command: integration delete
+    x-ezu-confirm: "Delete integration {$inputs.id}?"
     summary: Delete an integration between two database services.
     x-ezu-args: [id]
     inputs:
@@ -5505,6 +5508,7 @@ workflows:
 
   - workflowId: role-delete
     x-ezu-command: role delete
+    x-ezu-confirm: "Delete role {$inputs.role} of {$inputs.service}?"
     summary: Delete a role of a ClickHouse service.
     x-ezu-args: [service, role]
     inputs:

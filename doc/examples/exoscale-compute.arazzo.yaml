@@ -277,6 +277,7 @@ workflows:
 
   - workflowId: instance-delete
     x-ezu-command: instance delete
+    x-ezu-confirm: "Delete instance {$inputs.instance}?"
     summary: Delete an instance and wait until it is gone.
     x-ezu-args: [instance]
     inputs:
@@ -360,6 +361,7 @@ workflows:
 
   - workflowId: instance-stop
     x-ezu-command: instance stop
+    x-ezu-confirm: "Stop instance {$inputs.instance}?"
     summary: Stop an instance.
     x-ezu-args: [instance]
     inputs:
@@ -400,6 +402,7 @@ workflows:
 
   - workflowId: instance-reboot
     x-ezu-command: instance reboot
+    x-ezu-confirm: "Reboot instance {$inputs.instance}?"
     summary: Reboot an instance.
     x-ezu-args: [instance]
     inputs:
@@ -440,6 +443,7 @@ workflows:
 
   - workflowId: instance-reset
     x-ezu-command: instance reset
+    x-ezu-confirm: "Reset instance {$inputs.instance}?"
     summary: Reinstall an instance from a template, erasing its disk.
     x-ezu-args: [instance]
     inputs:
@@ -1153,6 +1157,7 @@ workflows:
 
   - workflowId: instance-reset-password
     x-ezu-command: instance reset-password
+    x-ezu-confirm: "Reset the password of instance {$inputs.instance}?"
     summary: Give an instance a new password, and show it.
     x-ezu-args: [instance]
     inputs:
@@ -1315,6 +1320,7 @@ workflows:
 
   - workflowId: instance-reverse-dns-delete
     x-ezu-command: instance reverse-dns delete
+    x-ezu-confirm: "Delete the reverse DNS of instance {$inputs.instance}?"
     summary: Remove the domain name an instance's IP address resolves to.
     x-ezu-args: [instance]
     inputs:
@@ -1430,6 +1436,7 @@ workflows:
 
   - workflowId: instance-snapshot-delete
     x-ezu-command: instance snapshot delete
+    x-ezu-confirm: "Delete instance snapshot {$inputs.id}?"
     summary: Delete an instance snapshot.
     x-ezu-args: [id]
     inputs:
@@ -1460,6 +1467,7 @@ workflows:
 
   - workflowId: instance-snapshot-revert
     x-ezu-command: instance snapshot revert
+    x-ezu-confirm: "Revert instance {$inputs.instance} to snapshot {$inputs.snapshot}?"
     summary: Revert an instance to one of its snapshots; the instance must be stopped.
     x-ezu-args: [instance, snapshot]
     inputs:
@@ -1733,6 +1741,7 @@ workflows:
 
   - workflowId: template-delete
     x-ezu-command: template delete
+    x-ezu-confirm: "Delete template {$inputs.template}?"
     summary: Delete one of your templates.
     x-ezu-args: [template]
     inputs:
@@ -2059,6 +2068,7 @@ workflows:
 
   - workflowId: ssh-key-delete
     x-ezu-command: ssh-key delete
+    x-ezu-confirm: "Delete SSH key {$inputs.name}?"
     summary: Delete an SSH key.
     x-ezu-args: [name]
     inputs:
@@ -2173,6 +2183,7 @@ workflows:
 
   - workflowId: security-group-delete
     x-ezu-command: security-group delete
+    x-ezu-confirm: "Delete security group {$inputs.security-group}?"
     summary: Delete a security group.
     x-ezu-args: [security-group]
     inputs:
@@ -2320,6 +2331,7 @@ workflows:
 
   - workflowId: security-group-rule-delete
     x-ezu-command: security-group rule delete
+    x-ezu-confirm: "Delete rule {$inputs.rule} of security group {$inputs.security-group}?"
     summary: Delete a rule of a security group.
     x-ezu-args: [security-group, rule]
     inputs:
@@ -2550,6 +2562,7 @@ workflows:
 
   - workflowId: elastic-ip-delete
     x-ezu-command: elastic-ip delete
+    x-ezu-confirm: "Delete elastic IP {$inputs.elastic-ip}?"
     summary: Delete an elastic IP.
     x-ezu-args: [elastic-ip]
     inputs:
@@ -2753,6 +2766,7 @@ workflows:
 
   - workflowId: elastic-ip-reverse-dns-delete
     x-ezu-command: elastic-ip reverse-dns delete
+    x-ezu-confirm: "Delete the reverse DNS of elastic IP {$inputs.elastic-ip}?"
     summary: Remove the domain name an elastic IP resolves to.
     x-ezu-args: [elastic-ip]
     inputs:
@@ -2890,6 +2904,7 @@ workflows:
 
   - workflowId: private-network-delete
     x-ezu-command: private-network delete
+    x-ezu-confirm: "Delete private network {$inputs.private-network}?"
     summary: Delete a private network.
     x-ezu-args: [private-network]
     inputs:
@@ -3103,6 +3118,7 @@ workflows:
 
   - workflowId: anti-affinity-group-delete
     x-ezu-command: anti-affinity-group delete
+    x-ezu-confirm: "Delete anti-affinity group {$inputs.anti-affinity-group}?"
     summary: Delete an anti-affinity group.
     x-ezu-args: [anti-affinity-group]
     inputs:
@@ -3303,6 +3319,7 @@ workflows:
 
   - workflowId: block-storage-delete
     x-ezu-command: block-storage delete
+    x-ezu-confirm: "Delete block storage volume {$inputs.volume}?"
     summary: Delete a block storage volume.
     x-ezu-args: [volume]
     inputs:
@@ -3662,6 +3679,7 @@ workflows:
 
   - workflowId: block-storage-snapshot-delete
     x-ezu-command: block-storage snapshot delete
+    x-ezu-confirm: "Delete block storage snapshot {$inputs.snapshot}?"
     summary: Delete a block storage snapshot.
     x-ezu-args: [snapshot]
     inputs:
@@ -4341,6 +4359,7 @@ workflows:
 
   - workflowId: instance-pool-evict
     x-ezu-command: instance-pool evict
+    x-ezu-confirm: "Evict instance {$inputs.instance} from instance pool {$inputs.instance-pool}?"
     summary: Remove an instance from an instance pool, deleting it and shrinking the pool.
     x-ezu-args: [instance-pool, instance]
     inputs:
@@ -4394,6 +4413,7 @@ workflows:
 
   - workflowId: instance-pool-delete
     x-ezu-command: instance-pool delete
+    x-ezu-confirm: "Delete instance pool {$inputs.instance-pool}?"
     summary: Delete an instance pool and its instances.
     x-ezu-args: [instance-pool]
     inputs:
@@ -4606,6 +4626,7 @@ workflows:
 
   - workflowId: load-balancer-delete
     x-ezu-command: load-balancer delete
+    x-ezu-confirm: "Delete load balancer {$inputs.load-balancer}?"
     summary: Delete a network load balancer.
     x-ezu-args: [load-balancer]
     inputs:
@@ -5048,6 +5069,7 @@ workflows:
 
   - workflowId: load-balancer-service-delete
     x-ezu-command: load-balancer service delete
+    x-ezu-confirm: "Delete service {$inputs.service} of load balancer {$inputs.load-balancer}?"
     summary: Delete a service of a network load balancer.
     x-ezu-args: [load-balancer, service]
     inputs:

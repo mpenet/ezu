@@ -224,6 +224,10 @@
          :key :check
          :scope :az
          :help "Check the document against its sources without running it"}
+        {:names ["--yes"]
+         :key :yes
+         :scope :az
+         :help "Answer yes to the workflow's confirmation question"}
         {:names ["--trust-sources"]
          :key :trust-sources
          :scope :az

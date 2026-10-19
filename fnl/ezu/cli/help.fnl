@@ -55,6 +55,9 @@ inputs JSON Schema; positional lists inputs that may be passed positionally;
              (or ?command (.. "ezu az <name-or-file> " wf.workflowId))
              (table.concat (icollect [_ n (ipairs positional)] (.. " <" n ">")))
              " [name=value ...]"))
+    (let [question (. wf :x-ezu-confirm)]
+      (when (= (type question) :string)
+        (add (.. "\nAsks first: " question " (--yes answers yes)"))))
     (if (= 0 (length names))
         (add "\nInputs: none")
         (do

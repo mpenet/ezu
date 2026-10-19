@@ -223,6 +223,7 @@ workflows:
 
   - workflowId: vpc-delete
     x-ezu-command: vpc delete
+    x-ezu-confirm: "Delete VPC {$inputs.vpc}?"
     summary: Delete a VPC.
     x-ezu-args: [vpc]
     inputs:
@@ -465,6 +466,7 @@ workflows:
 
   - workflowId: vpc-subnet-delete
     x-ezu-command: vpc subnet delete
+    x-ezu-confirm: "Delete subnet {$inputs.subnet} of VPC {$inputs.vpc}?"
     summary: Delete a subnet of a VPC.
     x-ezu-args: [vpc, subnet]
     inputs:
@@ -769,6 +771,7 @@ workflows:
 
   - workflowId: vpc-route-delete
     x-ezu-command: vpc route delete
+    x-ezu-confirm: "Delete route {$inputs.route} of VPC {$inputs.vpc}?"
     summary: Delete a route of a subnet of a VPC.
     x-ezu-args: [vpc, route]
     inputs:

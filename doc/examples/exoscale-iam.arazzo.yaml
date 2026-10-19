@@ -344,6 +344,7 @@ workflows:
 
   - workflowId: role-delete
     x-ezu-command: role delete
+    x-ezu-confirm: "Delete role {$inputs.role}?"
     summary: Delete an IAM role and wait until it is gone.
     x-ezu-args: [role]
     inputs:
@@ -495,6 +496,7 @@ workflows:
 
   - workflowId: api-key-delete
     x-ezu-command: api-key delete
+    x-ezu-confirm: "Delete API key {$inputs.api-key}?"
     summary: Delete an API key and wait until it is gone.
     x-ezu-args: [api-key]
     inputs:
@@ -575,6 +577,7 @@ workflows:
 
   - workflowId: org-policy-reset
     x-ezu-command: org-policy reset
+    x-ezu-confirm: "Reset the organization policy?"
     summary: Reset the organization's IAM policy to allow everything, and show it.
     steps:
       - stepId: reset
@@ -708,6 +711,7 @@ workflows:
 
   - workflowId: user-delete
     x-ezu-command: user delete
+    x-ezu-confirm: "Delete user {$inputs.user}?"
     summary: Remove a user from the organization and wait until it is done.
     x-ezu-args: [user]
     inputs:

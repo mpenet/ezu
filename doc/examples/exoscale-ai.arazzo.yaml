@@ -192,6 +192,7 @@ workflows:
 
   - workflowId: model-delete
     x-ezu-command: model delete
+    x-ezu-confirm: "Delete model {$inputs.model}?"
     summary: Delete an AI model and wait until it is gone.
     x-ezu-args: [model]
     inputs:
@@ -457,6 +458,7 @@ workflows:
 
   - workflowId: deployment-delete
     x-ezu-command: deployment delete
+    x-ezu-confirm: "Delete deployment {$inputs.deployment}?"
     summary: Delete an AI deployment and wait until it is gone.
     x-ezu-args: [deployment]
     inputs:

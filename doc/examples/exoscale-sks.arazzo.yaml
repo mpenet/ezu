@@ -485,6 +485,7 @@ workflows:
 
   - workflowId: delete
     x-ezu-command: delete
+    x-ezu-confirm: "Delete SKS cluster {$inputs.cluster}?"
     summary: Delete an SKS cluster and wait until it is gone.
     x-ezu-args: [cluster]
     inputs:
@@ -1473,6 +1474,7 @@ workflows:
 
   - workflowId: nodepool-evict
     x-ezu-command: nodepool evict
+    x-ezu-confirm: "Evict instances from nodepool {$inputs.nodepool} of {$inputs.cluster}?"
     summary: Remove nodes from a nodepool, shrinking it.
     x-ezu-args: [cluster, nodepool]
     inputs:
@@ -1532,6 +1534,7 @@ workflows:
 
   - workflowId: nodepool-delete
     x-ezu-command: nodepool delete
+    x-ezu-confirm: "Delete nodepool {$inputs.nodepool} of {$inputs.cluster}?"
     summary: Delete a nodepool and wait until it is gone.
     x-ezu-args: [cluster, nodepool]
     inputs:

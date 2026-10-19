@@ -87,6 +87,7 @@ Options go anywhere after the command. `--name=value` and `--name value` are equ
 | `--profile=NAME` | Profile to authenticate with |
 | `--arazzo-output=MODE` | `final` (default), `steps`, `progress` or `full`; see [Output modes](arazzo.md#output-modes) |
 | `--max-gotos=N` | Most jumps to a single step before the workflow aborts (default 50) |
+| `--yes` | Answer yes to the workflow's question (`x-ezu-confirm`); see [Asking first](arazzo.md#asking-first) |
 | `--trust-sources` | Load Arazzo sources from anywhere, not only next to the document; see [Workflows of other documents](arazzo.md#workflows-of-other-documents) |
 | `--check` | Check the document, or one workflow, against its sources without running it; see [Checking a document](arazzo.md#checking-a-document) |
 | `--link` | Print how to make a named document a command of its own; see [A document as its own command](arazzo.md#a-document-as-its-own-command) |

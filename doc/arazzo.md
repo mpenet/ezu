@@ -115,6 +115,23 @@ $ vm get-instance 0b6f3c2e
 
 ezu prints the command rather than running it: the name is yours to choose, and so is where the link goes. `vm completion fish` (or `bash`, `zsh`) gives the completion of the new command; `vm --help` lists its workflows. Under its own name, or a name nothing is configured for, ezu is itself.
 
+### Asking first
+
+`x-ezu-confirm`, an ezu extension, is a question a workflow asks before it runs, with inputs embedded as `{$inputs.NAME}`:
+
+```yaml
+- workflowId: instance-delete
+  x-ezu-command: instance delete
+  x-ezu-confirm: "Delete instance {$inputs.instance}?"
+```
+
+```console
+$ exo compute instance delete web1
+Delete instance web1? [y/N] y
+```
+
+Only `y` or `yes` goes ahead; anything else stops before a request is sent. `--yes` answers yes, as scripts need: without a terminal to ask on, ezu stops and says so. The question is asked of the workflow you run, not of those it runs as steps; `--help` shows it and `--check` checks its inputs exist.
+
 ### Command words
 
 `x-ezu-command`, an ezu extension, gives a workflow the words that run it, so a document reads as a command line tool rather than a list of workflow ids:

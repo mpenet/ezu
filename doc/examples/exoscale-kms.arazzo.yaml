@@ -362,6 +362,7 @@ workflows:
 
   - workflowId: key-schedule-deletion
     x-ezu-command: key schedule-deletion
+    x-ezu-confirm: "Schedule the deletion of KMS key {$inputs.key}?"
     summary: Schedule a KMS key's deletion after a delay, and show when it happens.
     x-ezu-args: [key]
     inputs:

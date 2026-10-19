@@ -405,7 +405,13 @@ data holding them."
                   (tset seen a true)))))
         (let [scope {: wf
                      : steps
-                     :wf-params (if (list? wf.parameters) wf.parameters [])}]
+                     :wf-params (if (list? wf.parameters) wf.parameters [])}
+              question (. wf :x-ezu-confirm)]
+          (if (and (not= nil question) (not= (type question) :string))
+              (report :error where
+                      "x-ezu-confirm must be a question (a string)")
+              (= (type question) :string)
+              (check-value scope where question))
           (each [_ step (ipairs step-list)]
             (when (= (type step.stepId) :string)
               (check-step scope step (.. where " › step " step.stepId))))

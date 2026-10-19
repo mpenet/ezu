@@ -446,6 +446,25 @@ context's."
                               :timeout (request-timeout profile p env.config)})]
     {: named : file : doc : profile-name : profile}))
 
+(fn ask-on-terminal [question]
+  "What is typed on the terminal after question, or nil without one."
+  (when (and (util.terminal? 0) (util.terminal? 2))
+    (io.stderr:write question)
+    (io.read :l)))
+
+(fn confirm [wf inputs p env]
+  "Stop unless the question the workflow asks first (x-ezu-confirm, an ezu
+extension) is answered yes, or --yes was given; nobody to ask stops too."
+  (let [q (. wf :x-ezu-confirm)]
+    (when (and (= (type q) :string) (not p.yes))
+      (let [question (arazzo-expr.eval-template {:inputs inputs} q)
+            answer ((or env.ask ask-on-terminal) (.. question " [y/N] "))
+            said (: (or answer "") :match "^%s*(.-)%s*$")]
+        (if (= nil answer)
+            (die (.. question " Nobody to ask: add --yes to go ahead"))
+            (not (or (= (said:lower) "y") (= (said:lower) "yes")))
+            (die "not confirmed: nothing was done"))))))
+
 (fn source-loader [context p env]
   "(load doc source) for the documents context's document mounts."
   (arazzo.source-loader {:trust-sources (trust-sources? context.named p)
@@ -531,6 +550,7 @@ context's."
                         (values (- i offset) true))
               inputs (workflow-inputs p named target-doc wf target.rest literal)]
           (check-inputs target-doc wf inputs p)
+          (confirm wf inputs p env)
           (execute-workflow context wf inputs p env)))))
 
 ;; ---- op ----

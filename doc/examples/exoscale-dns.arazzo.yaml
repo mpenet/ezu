@@ -212,6 +212,7 @@ workflows:
 
   - workflowId: delete
     x-ezu-command: delete
+    x-ezu-confirm: "Delete DNS domain {$inputs.domain} and its records?"
     summary: Delete a DNS domain and its records, and wait until it is gone.
     x-ezu-args: [domain]
     inputs:

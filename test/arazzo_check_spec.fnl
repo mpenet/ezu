@@ -311,6 +311,17 @@
                       (assert.is_true (has far
                                            "wf › step call: Arazzo source 'other' is not next to the document"
                                            :error))))))
+            (it "checks the confirmation question"
+                (fn []
+                  (assert.is_true (has (check.check (doc [] {:x-ezu-confirm 5})
+                                                    clients)
+                                       "wf: x-ezu-confirm must be a question (a string)"
+                                       :error))
+                  (assert.is_true (has (check.check (doc []
+                                                         {:x-ezu-confirm "Delete {$inputs.nope}?"})
+                                                    clients)
+                                       "wf: no input 'nope' in workflow wf"
+                                       :error))))
             (it "leaves the options it is given as they are"
                 (fn []
                   (let [opts {:trust-sources false}]

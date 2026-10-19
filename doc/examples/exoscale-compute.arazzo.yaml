@@ -44,6 +44,7 @@ workflows:
       required: [instance]
       properties:
         instance:
+          x-ezu-complete: {workflowId: instance-list, selector: "$.instances[*].name"}
           type: string
           description: Instance name or id
     steps:
@@ -98,9 +99,11 @@ workflows:
           description: Disk size in GiB
           default: 50
         ssh-key:
+          x-ezu-complete: {workflowId: ssh-key-list, selector: "$['ssh-keys'][*].name"}
           type: string
           description: Name of an SSH key to deploy on the instance
         private-network:
+          x-ezu-complete: {workflowId: private-network-list, selector: "$['private-networks'][*].name"}
           type: string
           description: Name or id of a private network to attach the instance to
         public-ip:
@@ -226,6 +229,7 @@ workflows:
       required: [instance]
       properties:
         instance:
+          x-ezu-complete: {workflowId: instance-list, selector: "$.instances[*].name"}
           type: string
           description: Instance name or id
         name:
@@ -285,6 +289,7 @@ workflows:
       required: [instance]
       properties:
         instance:
+          x-ezu-complete: {workflowId: instance-list, selector: "$.instances[*].name"}
           type: string
           description: Instance name or id
     steps:
@@ -320,6 +325,7 @@ workflows:
       required: [instance]
       properties:
         instance:
+          x-ezu-complete: {workflowId: instance-list, selector: "$.instances[*].name"}
           type: string
           description: Instance name or id
         rescue-profile:
@@ -369,6 +375,7 @@ workflows:
       required: [instance]
       properties:
         instance:
+          x-ezu-complete: {workflowId: instance-list, selector: "$.instances[*].name"}
           type: string
           description: Instance name or id
     steps:
@@ -410,6 +417,7 @@ workflows:
       required: [instance]
       properties:
         instance:
+          x-ezu-complete: {workflowId: instance-list, selector: "$.instances[*].name"}
           type: string
           description: Instance name or id
     steps:
@@ -451,6 +459,7 @@ workflows:
       required: [instance]
       properties:
         instance:
+          x-ezu-complete: {workflowId: instance-list, selector: "$.instances[*].name"}
           type: string
           description: Instance name or id
         template:
@@ -534,6 +543,7 @@ workflows:
       required: [instance, size]
       properties:
         instance:
+          x-ezu-complete: {workflowId: instance-list, selector: "$.instances[*].name"}
           type: string
           description: Instance name or id
         family:
@@ -598,6 +608,7 @@ workflows:
       required: [instance, disk-size]
       properties:
         instance:
+          x-ezu-complete: {workflowId: instance-list, selector: "$.instances[*].name"}
           type: string
           description: Instance name or id
         disk-size:
@@ -645,6 +656,7 @@ workflows:
       required: [instance]
       properties:
         instance:
+          x-ezu-complete: {workflowId: instance-list, selector: "$.instances[*].name"}
           type: string
           description: Instance name or id
     steps:
@@ -675,9 +687,11 @@ workflows:
       required: [instance, security-group]
       properties:
         instance:
+          x-ezu-complete: {workflowId: instance-list, selector: "$.instances[*].name"}
           type: string
           description: Instance name or id
         security-group:
+          x-ezu-complete: {workflowId: security-group-list, selector: "$['security-groups'][*].name"}
           type: string
           description: Security group name or id
     steps:
@@ -728,9 +742,11 @@ workflows:
       required: [instance, security-group]
       properties:
         instance:
+          x-ezu-complete: {workflowId: instance-list, selector: "$.instances[*].name"}
           type: string
           description: Instance name or id
         security-group:
+          x-ezu-complete: {workflowId: security-group-list, selector: "$['security-groups'][*].name"}
           type: string
           description: Security group name or id
     steps:
@@ -781,9 +797,11 @@ workflows:
       required: [instance, private-network]
       properties:
         instance:
+          x-ezu-complete: {workflowId: instance-list, selector: "$.instances[*].name"}
           type: string
           description: Instance name or id
         private-network:
+          x-ezu-complete: {workflowId: private-network-list, selector: "$['private-networks'][*].name"}
           type: string
           description: Private network name or id
         ip:
@@ -838,9 +856,11 @@ workflows:
       required: [instance, private-network]
       properties:
         instance:
+          x-ezu-complete: {workflowId: instance-list, selector: "$.instances[*].name"}
           type: string
           description: Instance name or id
         private-network:
+          x-ezu-complete: {workflowId: private-network-list, selector: "$['private-networks'][*].name"}
           type: string
           description: Private network name or id
     steps:
@@ -891,9 +911,11 @@ workflows:
       required: [instance, private-network]
       properties:
         instance:
+          x-ezu-complete: {workflowId: instance-list, selector: "$.instances[*].name"}
           type: string
           description: Instance name or id
         private-network:
+          x-ezu-complete: {workflowId: private-network-list, selector: "$['private-networks'][*].name"}
           type: string
           description: Private network name or id
         ip:
@@ -948,9 +970,11 @@ workflows:
       required: [instance, elastic-ip]
       properties:
         instance:
+          x-ezu-complete: {workflowId: instance-list, selector: "$.instances[*].name"}
           type: string
           description: Instance name or id
         elastic-ip:
+          x-ezu-complete: {workflowId: elastic-ip-list, selector: "$['elastic-ips'][*].ip"}
           type: string
           description: Elastic IP address or id
     steps:
@@ -1001,9 +1025,11 @@ workflows:
       required: [instance, elastic-ip]
       properties:
         instance:
+          x-ezu-complete: {workflowId: instance-list, selector: "$.instances[*].name"}
           type: string
           description: Instance name or id
         elastic-ip:
+          x-ezu-complete: {workflowId: elastic-ip-list, selector: "$['elastic-ips'][*].ip"}
           type: string
           description: Elastic IP address or id
     steps:
@@ -1054,6 +1080,7 @@ workflows:
       required: [instance]
       properties:
         instance:
+          x-ezu-complete: {workflowId: instance-list, selector: "$.instances[*].name"}
           type: string
           description: Instance name or id
     steps:
@@ -1094,6 +1121,7 @@ workflows:
       required: [instance]
       properties:
         instance:
+          x-ezu-complete: {workflowId: instance-list, selector: "$.instances[*].name"}
           type: string
           description: Instance name or id
     steps:
@@ -1134,6 +1162,7 @@ workflows:
       required: [instance]
       properties:
         instance:
+          x-ezu-complete: {workflowId: instance-list, selector: "$.instances[*].name"}
           type: string
           description: Instance name or id
     steps:
@@ -1165,6 +1194,7 @@ workflows:
       required: [instance]
       properties:
         instance:
+          x-ezu-complete: {workflowId: instance-list, selector: "$.instances[*].name"}
           type: string
           description: Instance name or id
     steps:
@@ -1210,6 +1240,7 @@ workflows:
       required: [instance]
       properties:
         instance:
+          x-ezu-complete: {workflowId: instance-list, selector: "$.instances[*].name"}
           type: string
           description: Instance name or id
     steps:
@@ -1250,6 +1281,7 @@ workflows:
       required: [instance]
       properties:
         instance:
+          x-ezu-complete: {workflowId: instance-list, selector: "$.instances[*].name"}
           type: string
           description: Instance name or id
     steps:
@@ -1280,6 +1312,7 @@ workflows:
       required: [instance, domain-name]
       properties:
         instance:
+          x-ezu-complete: {workflowId: instance-list, selector: "$.instances[*].name"}
           type: string
           description: Instance name or id
         domain-name:
@@ -1328,6 +1361,7 @@ workflows:
       required: [instance]
       properties:
         instance:
+          x-ezu-complete: {workflowId: instance-list, selector: "$.instances[*].name"}
           type: string
           description: Instance name or id
     steps:
@@ -1403,6 +1437,7 @@ workflows:
       required: [instance]
       properties:
         instance:
+          x-ezu-complete: {workflowId: instance-list, selector: "$.instances[*].name"}
           type: string
           description: Instance name or id
     steps:
@@ -1475,6 +1510,7 @@ workflows:
       required: [instance, snapshot]
       properties:
         instance:
+          x-ezu-complete: {workflowId: instance-list, selector: "$.instances[*].name"}
           type: string
           description: Instance name or id
         snapshot:
@@ -2121,6 +2157,7 @@ workflows:
       required: [security-group]
       properties:
         security-group:
+          x-ezu-complete: {workflowId: security-group-list, selector: "$['security-groups'][*].name"}
           type: string
           description: Security group name or id
     steps:
@@ -2191,6 +2228,7 @@ workflows:
       required: [security-group]
       properties:
         security-group:
+          x-ezu-complete: {workflowId: security-group-list, selector: "$['security-groups'][*].name"}
           type: string
           description: Security group name or id
     steps:
@@ -2226,6 +2264,7 @@ workflows:
       required: [security-group]
       properties:
         security-group:
+          x-ezu-complete: {workflowId: security-group-list, selector: "$['security-groups'][*].name"}
           type: string
           description: Security group name or id
         flow:
@@ -2339,6 +2378,7 @@ workflows:
       required: [security-group, rule]
       properties:
         security-group:
+          x-ezu-complete: {workflowId: security-group-list, selector: "$['security-groups'][*].name"}
           type: string
           description: Security group name or id
         rule:
@@ -2385,6 +2425,7 @@ workflows:
       required: [security-group, cidr]
       properties:
         security-group:
+          x-ezu-complete: {workflowId: security-group-list, selector: "$['security-groups'][*].name"}
           type: string
           description: Security group name or id
         cidr:
@@ -2432,6 +2473,7 @@ workflows:
       required: [security-group, cidr]
       properties:
         security-group:
+          x-ezu-complete: {workflowId: security-group-list, selector: "$['security-groups'][*].name"}
           type: string
           description: Security group name or id
         cidr:
@@ -2494,6 +2536,7 @@ workflows:
       required: [elastic-ip]
       properties:
         elastic-ip:
+          x-ezu-complete: {workflowId: elastic-ip-list, selector: "$['elastic-ips'][*].ip"}
           type: string
           description: Elastic IP address or id
     steps:
@@ -2570,6 +2613,7 @@ workflows:
       required: [elastic-ip]
       properties:
         elastic-ip:
+          x-ezu-complete: {workflowId: elastic-ip-list, selector: "$['elastic-ips'][*].ip"}
           type: string
           description: Elastic IP address or id
     steps:
@@ -2605,6 +2649,7 @@ workflows:
       required: [elastic-ip]
       properties:
         elastic-ip:
+          x-ezu-complete: {workflowId: elastic-ip-list, selector: "$['elastic-ips'][*].ip"}
           type: string
           description: Elastic IP address or id
         description:
@@ -2696,6 +2741,7 @@ workflows:
       required: [elastic-ip]
       properties:
         elastic-ip:
+          x-ezu-complete: {workflowId: elastic-ip-list, selector: "$['elastic-ips'][*].ip"}
           type: string
           description: Elastic IP address or id
     steps:
@@ -2726,6 +2772,7 @@ workflows:
       required: [elastic-ip, domain-name]
       properties:
         elastic-ip:
+          x-ezu-complete: {workflowId: elastic-ip-list, selector: "$['elastic-ips'][*].ip"}
           type: string
           description: Elastic IP address or id
         domain-name:
@@ -2774,6 +2821,7 @@ workflows:
       required: [elastic-ip]
       properties:
         elastic-ip:
+          x-ezu-complete: {workflowId: elastic-ip-list, selector: "$['elastic-ips'][*].ip"}
           type: string
           description: Elastic IP address or id
     steps:
@@ -2824,6 +2872,7 @@ workflows:
       required: [private-network]
       properties:
         private-network:
+          x-ezu-complete: {workflowId: private-network-list, selector: "$['private-networks'][*].name"}
           type: string
           description: Private network name or id
     steps:
@@ -2912,6 +2961,7 @@ workflows:
       required: [private-network]
       properties:
         private-network:
+          x-ezu-complete: {workflowId: private-network-list, selector: "$['private-networks'][*].name"}
           type: string
           description: Private network name or id
     steps:
@@ -2947,6 +2997,7 @@ workflows:
       required: [private-network]
       properties:
         private-network:
+          x-ezu-complete: {workflowId: private-network-list, selector: "$['private-networks'][*].name"}
           type: string
           description: Private network name or id
         name:
@@ -3056,6 +3107,7 @@ workflows:
       required: [anti-affinity-group]
       properties:
         anti-affinity-group:
+          x-ezu-complete: {workflowId: anti-affinity-group-list, selector: "$['anti-affinity-groups'][*].name"}
           type: string
           description: Anti-affinity group name or id
     steps:
@@ -3126,6 +3178,7 @@ workflows:
       required: [anti-affinity-group]
       properties:
         anti-affinity-group:
+          x-ezu-complete: {workflowId: anti-affinity-group-list, selector: "$['anti-affinity-groups'][*].name"}
           type: string
           description: Anti-affinity group name or id
     steps:
@@ -3251,6 +3304,7 @@ workflows:
       required: [volume]
       properties:
         volume:
+          x-ezu-complete: {workflowId: block-storage-list, selector: "$.volumes[*].name"}
           type: string
           description: Volume name or id
     steps:
@@ -3327,6 +3381,7 @@ workflows:
       required: [volume]
       properties:
         volume:
+          x-ezu-complete: {workflowId: block-storage-list, selector: "$.volumes[*].name"}
           type: string
           description: Volume name or id
     steps:
@@ -3362,9 +3417,11 @@ workflows:
       required: [volume, instance]
       properties:
         volume:
+          x-ezu-complete: {workflowId: block-storage-list, selector: "$.volumes[*].name"}
           type: string
           description: Volume name or id
         instance:
+          x-ezu-complete: {workflowId: instance-list, selector: "$.instances[*].name"}
           type: string
           description: Instance name or id
     steps:
@@ -3415,6 +3472,7 @@ workflows:
       required: [volume]
       properties:
         volume:
+          x-ezu-complete: {workflowId: block-storage-list, selector: "$.volumes[*].name"}
           type: string
           description: Volume name or id
     steps:
@@ -3455,6 +3513,7 @@ workflows:
       required: [volume]
       properties:
         volume:
+          x-ezu-complete: {workflowId: block-storage-list, selector: "$.volumes[*].name"}
           type: string
           description: Volume name or id
         name:
@@ -3580,6 +3639,7 @@ workflows:
       required: [volume]
       properties:
         volume:
+          x-ezu-complete: {workflowId: block-storage-list, selector: "$.volumes[*].name"}
           type: string
           description: Volume name or id
         name:
@@ -3767,6 +3827,7 @@ workflows:
       required: [instance-pool]
       properties:
         instance-pool:
+          x-ezu-complete: {workflowId: instance-pool-list, selector: "$['instance-pools'][*].name"}
           type: string
           description: Instance pool name or id
     steps:
@@ -3831,6 +3892,7 @@ workflows:
           description: Disk size in GiB
           default: 50
         ssh-key:
+          x-ezu-complete: {workflowId: ssh-key-list, selector: "$['ssh-keys'][*].name"}
           type: string
           description: Name of an SSH key to deploy on the instances
         instance-prefix:
@@ -3847,12 +3909,15 @@ workflows:
           type: integer
           description: Minimum number of running instances
         security-group:
+          x-ezu-complete: {workflowId: security-group-list, selector: "$['security-groups'][*].name"}
           type: string
           description: Name or id of a security group for the instances
         anti-affinity-group:
+          x-ezu-complete: {workflowId: anti-affinity-group-list, selector: "$['anti-affinity-groups'][*].name"}
           type: string
           description: Name or id of an anti-affinity group for the instances
         private-network:
+          x-ezu-complete: {workflowId: private-network-list, selector: "$['private-networks'][*].name"}
           type: string
           description: Name or id of a private network to attach the instances to
         deploy-target:
@@ -4029,6 +4094,7 @@ workflows:
       required: [instance-pool]
       properties:
         instance-pool:
+          x-ezu-complete: {workflowId: instance-pool-list, selector: "$['instance-pools'][*].name"}
           type: string
           description: Instance pool name or id
         name:
@@ -4056,6 +4122,7 @@ workflows:
           type: integer
           description: Disk size in GiB
         ssh-key:
+          x-ezu-complete: {workflowId: ssh-key-list, selector: "$['ssh-keys'][*].name"}
           type: string
           description: Name of an SSH key to deploy on the instances
         instance-prefix:
@@ -4072,12 +4139,15 @@ workflows:
           type: integer
           description: Minimum number of running instances
         security-group:
+          x-ezu-complete: {workflowId: security-group-list, selector: "$['security-groups'][*].name"}
           type: string
           description: Name or id of the security group for the instances; it replaces the current ones
         anti-affinity-group:
+          x-ezu-complete: {workflowId: anti-affinity-group-list, selector: "$['anti-affinity-groups'][*].name"}
           type: string
           description: Name or id of the anti-affinity group for the instances; it replaces the current ones
         private-network:
+          x-ezu-complete: {workflowId: private-network-list, selector: "$['private-networks'][*].name"}
           type: string
           description: Name or id of the private network for the instances; it replaces the current ones
         deploy-target:
@@ -4319,6 +4389,7 @@ workflows:
       required: [instance-pool, size]
       properties:
         instance-pool:
+          x-ezu-complete: {workflowId: instance-pool-list, selector: "$['instance-pools'][*].name"}
           type: string
           description: Instance pool name or id
         size:
@@ -4367,9 +4438,11 @@ workflows:
       required: [instance-pool, instance]
       properties:
         instance-pool:
+          x-ezu-complete: {workflowId: instance-pool-list, selector: "$['instance-pools'][*].name"}
           type: string
           description: Instance pool name or id
         instance:
+          x-ezu-complete: {workflowId: instance-list, selector: "$.instances[*].name"}
           type: string
           description: Name or id of the instance to evict
     steps:
@@ -4421,6 +4494,7 @@ workflows:
       required: [instance-pool]
       properties:
         instance-pool:
+          x-ezu-complete: {workflowId: instance-pool-list, selector: "$['instance-pools'][*].name"}
           type: string
           description: Instance pool name or id
     steps:
@@ -4501,6 +4575,7 @@ workflows:
       required: [load-balancer]
       properties:
         load-balancer:
+          x-ezu-complete: {workflowId: load-balancer-list, selector: "$['load-balancers'][*].name"}
           type: string
           description: Load balancer name or id
     steps:
@@ -4576,6 +4651,7 @@ workflows:
       required: [load-balancer]
       properties:
         load-balancer:
+          x-ezu-complete: {workflowId: load-balancer-list, selector: "$['load-balancers'][*].name"}
           type: string
           description: Load balancer name or id
         name:
@@ -4634,6 +4710,7 @@ workflows:
       required: [load-balancer]
       properties:
         load-balancer:
+          x-ezu-complete: {workflowId: load-balancer-list, selector: "$['load-balancers'][*].name"}
           type: string
           description: Load balancer name or id
     steps:
@@ -4669,6 +4746,7 @@ workflows:
       required: [load-balancer, service]
       properties:
         load-balancer:
+          x-ezu-complete: {workflowId: load-balancer-list, selector: "$['load-balancers'][*].name"}
           type: string
           description: Load balancer name or id
         service:
@@ -4715,6 +4793,7 @@ workflows:
       required: [load-balancer, name, instance-pool, port]
       properties:
         load-balancer:
+          x-ezu-complete: {workflowId: load-balancer-list, selector: "$['load-balancers'][*].name"}
           type: string
           description: Load balancer name or id
         name:
@@ -4724,6 +4803,7 @@ workflows:
           type: string
           description: Description
         instance-pool:
+          x-ezu-complete: {workflowId: instance-pool-list, selector: "$['instance-pools'][*].name"}
           type: string
           description: Name or id of the instance pool to forward traffic to
         port:
@@ -4962,6 +5042,7 @@ workflows:
       required: [load-balancer, service]
       properties:
         load-balancer:
+          x-ezu-complete: {workflowId: load-balancer-list, selector: "$['load-balancers'][*].name"}
           type: string
           description: Load balancer name or id
         service:
@@ -5077,6 +5158,7 @@ workflows:
       required: [load-balancer, service]
       properties:
         load-balancer:
+          x-ezu-complete: {workflowId: load-balancer-list, selector: "$['load-balancers'][*].name"}
           type: string
           description: Load balancer name or id
         service:

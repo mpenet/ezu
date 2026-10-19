@@ -130,6 +130,7 @@ workflows:
       required: [model]
       properties:
         model:
+          x-ezu-complete: {workflowId: model-list, selector: "$.models[*].name"}
           type: string
           description: Model name or id
     steps:
@@ -200,6 +201,7 @@ workflows:
       required: [model]
       properties:
         model:
+          x-ezu-complete: {workflowId: model-list, selector: "$.models[*].name"}
           type: string
           description: Model name or id
     steps:
@@ -261,6 +263,7 @@ workflows:
       required: [deployment]
       properties:
         deployment:
+          x-ezu-complete: {workflowId: deployment-list, selector: "$.deployments[*].name"}
           type: string
           description: Deployment name or id
     steps:
@@ -294,6 +297,7 @@ workflows:
           type: string
           description: Deployment name
         model:
+          x-ezu-complete: {workflowId: model-list, selector: "$.models[*].name"}
           type: string
           description: Name or id of the model to deploy
         gpu-type:
@@ -360,6 +364,7 @@ workflows:
       required: [deployment]
       properties:
         deployment:
+          x-ezu-complete: {workflowId: deployment-list, selector: "$.deployments[*].name"}
           type: string
           description: Deployment name or id
         name:
@@ -418,6 +423,7 @@ workflows:
       required: [deployment, size]
       properties:
         deployment:
+          x-ezu-complete: {workflowId: deployment-list, selector: "$.deployments[*].name"}
           type: string
           description: Deployment name or id
         size:
@@ -466,6 +472,7 @@ workflows:
       required: [deployment]
       properties:
         deployment:
+          x-ezu-complete: {workflowId: deployment-list, selector: "$.deployments[*].name"}
           type: string
           description: Deployment name or id
     steps:
@@ -501,6 +508,7 @@ workflows:
       required: [deployment]
       properties:
         deployment:
+          x-ezu-complete: {workflowId: deployment-list, selector: "$.deployments[*].name"}
           type: string
           description: Deployment name or id
         tail:
@@ -538,6 +546,7 @@ workflows:
       required: [deployment]
       properties:
         deployment:
+          x-ezu-complete: {workflowId: deployment-list, selector: "$.deployments[*].name"}
           type: string
           description: Deployment name or id
     steps:

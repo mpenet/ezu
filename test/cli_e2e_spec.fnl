@@ -2096,6 +2096,48 @@ commands, written to a new directory."
                     (assert.are.equal "✓ 2 documents, 1 workflow, 1 step: nothing wrong found"
                                       r.out))))))
 
+(describe "completing values a workflow lists"
+          (fn []
+            (it "runs the listing workflow once a minute at most"
+                (fn []
+                  (let [json (require :ezu.json)
+                        flow (with-open [f (io.open "test/fixtures/cli-flow.arazzo.json")]
+                               (json.decode (f:read :*a)))
+                        file (.. (os.tmpname) ".json")
+                        fetch (. flow :workflows 1)]
+                    (set (. flow :sourceDescriptions 1 :url)
+                         (.. (os.getenv "PWD") "/test/fixtures/cli-api.json"))
+                    (set (. fetch :x-ezu-args) [:id])
+                    (set (. fetch :inputs :properties :id :x-ezu-complete)
+                         {:workflowId "listPets" :selector "$.pets[*].id"})
+                    (table.insert flow.workflows
+                                  {:workflowId "listPets"
+                                   :steps [{:stepId "list"
+                                            :operationId "listPets"
+                                            :outputs {:pets "$response.body"}}]
+                                   :outputs {:pets "$steps.list.outputs.pets"}})
+                    (with-open [f (io.open file :w)]
+                      (f:write (json.encode flow)))
+                    (let [cfg (doto (collect [k v (pairs config)] k v)
+                                (tset :arazzo
+                                      {:pets {:file file :profile "yaml"}}))
+                          routes #{"GET https://api.test/pets" (respond 200
+                                                                        [{:id "p1"}
+                                                                         {:id "p2"}])}
+                          first (with-config cfg
+                                  #(ezu-run ["__complete"
+                                             "ezu az pets fetchPet "]
+                                            (routes)))
+                          again (with-config cfg
+                                  #(ezu-run ["__complete"
+                                             "ezu az pets fetchPet p"]
+                                            (routes)))]
+                      (os.remove file)
+                      (assert.are.equal "id=\np1\np2" first.out)
+                      (assert.are.equal 1 (length first.requests))
+                      (assert.are.equal "p1\np2" again.out)
+                      (assert.are.equal 0 (length again.requests))))))))
+
 (describe "workflow sources fetched from a URL"
           (fn []
             (it "come from the spec cache, until --reload"

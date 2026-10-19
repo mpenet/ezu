@@ -112,6 +112,7 @@ workflows:
       required: [domain]
       properties:
         domain:
+          x-ezu-complete: {workflowId: list, selector: "$.domains[*]['unicode-name']"}
           type: string
           description: Domain name or id
     steps:
@@ -153,6 +154,7 @@ workflows:
       required: [domain]
       properties:
         domain:
+          x-ezu-complete: {workflowId: list, selector: "$.domains[*]['unicode-name']"}
           type: string
           description: Domain name or id
     steps:
@@ -220,6 +222,7 @@ workflows:
       required: [domain]
       properties:
         domain:
+          x-ezu-complete: {workflowId: list, selector: "$.domains[*]['unicode-name']"}
           type: string
           description: Domain name or id
     steps:
@@ -257,6 +260,7 @@ workflows:
       required: [domain, type, content]
       properties:
         domain:
+          x-ezu-complete: {workflowId: list, selector: "$.domains[*]['unicode-name']"}
           type: string
           description: Domain name or id
         type:
@@ -331,6 +335,7 @@ workflows:
       required: [domain, record]
       properties:
         domain:
+          x-ezu-complete: {workflowId: list, selector: "$.domains[*]['unicode-name']"}
           type: string
           description: Domain name or id
         record:
@@ -416,6 +421,7 @@ workflows:
       required: [domain, record]
       properties:
         domain:
+          x-ezu-complete: {workflowId: list, selector: "$.domains[*]['unicode-name']"}
           type: string
           description: Domain name or id
         record:

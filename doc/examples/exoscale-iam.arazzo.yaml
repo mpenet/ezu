@@ -148,6 +148,7 @@ workflows:
       required: [role]
       properties:
         role:
+          x-ezu-complete: {workflowId: role-list, selector: "$['iam-roles'][*].name"}
           type: string
           description: Role name or id
     steps:
@@ -242,6 +243,7 @@ workflows:
       required: [role]
       properties:
         role:
+          x-ezu-complete: {workflowId: role-list, selector: "$['iam-roles'][*].name"}
           type: string
           description: Role name or id
         description:
@@ -306,6 +308,7 @@ workflows:
       required: [role, policy]
       properties:
         role:
+          x-ezu-complete: {workflowId: role-list, selector: "$['iam-roles'][*].name"}
           type: string
           description: Role name or id
         policy:
@@ -352,6 +355,7 @@ workflows:
       required: [role]
       properties:
         role:
+          x-ezu-complete: {workflowId: role-list, selector: "$['iam-roles'][*].name"}
           type: string
           description: Role name or id
     steps:
@@ -387,6 +391,7 @@ workflows:
       required: [role, ttl]
       properties:
         role:
+          x-ezu-complete: {workflowId: role-list, selector: "$['iam-roles'][*].name"}
           type: string
           description: Role name or id
         ttl:
@@ -439,6 +444,7 @@ workflows:
       required: [api-key]
       properties:
         api-key:
+          x-ezu-complete: {workflowId: api-key-list, selector: "$['api-keys'][*].name"}
           type: string
           description: API key name or key
     steps:
@@ -472,6 +478,7 @@ workflows:
           type: string
           description: API key name
         role:
+          x-ezu-complete: {workflowId: role-list, selector: "$['iam-roles'][*].name"}
           type: string
           description: Name or id of the IAM role the key acts as
     steps:
@@ -504,6 +511,7 @@ workflows:
       required: [api-key]
       properties:
         api-key:
+          x-ezu-complete: {workflowId: api-key-list, selector: "$['api-keys'][*].name"}
           type: string
           description: API key name or key
     steps:
@@ -623,6 +631,7 @@ workflows:
           type: string
           description: Email address to invite
         role:
+          x-ezu-complete: {workflowId: role-list, selector: "$['iam-roles'][*].name"}
           type: string
           description: Name or id of the user's IAM role
     steps:
@@ -668,6 +677,7 @@ workflows:
           type: string
           description: User email or id
         role:
+          x-ezu-complete: {workflowId: role-list, selector: "$['iam-roles'][*].name"}
           type: string
           description: Name or id of the user's new IAM role
     steps:

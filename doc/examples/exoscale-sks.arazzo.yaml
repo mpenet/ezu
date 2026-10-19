@@ -144,6 +144,7 @@ workflows:
       required: [cluster]
       properties:
         cluster:
+          x-ezu-complete: {workflowId: list, selector: "$.clusters[*].name"}
           type: string
           description: Cluster name or id
     steps:
@@ -366,6 +367,7 @@ workflows:
       required: [cluster]
       properties:
         cluster:
+          x-ezu-complete: {workflowId: list, selector: "$.clusters[*].name"}
           type: string
           description: Cluster name or id
         name:
@@ -493,6 +495,7 @@ workflows:
       required: [cluster]
       properties:
         cluster:
+          x-ezu-complete: {workflowId: list, selector: "$.clusters[*].name"}
           type: string
           description: Cluster name or id
     steps:
@@ -528,6 +531,7 @@ workflows:
       required: [cluster, version]
       properties:
         cluster:
+          x-ezu-complete: {workflowId: list, selector: "$.clusters[*].name"}
           type: string
           description: Cluster name or id
         version:
@@ -575,6 +579,7 @@ workflows:
       required: [cluster]
       properties:
         cluster:
+          x-ezu-complete: {workflowId: list, selector: "$.clusters[*].name"}
           type: string
           description: Cluster name or id
     steps:
@@ -638,6 +643,7 @@ workflows:
       required: [cluster, user]
       properties:
         cluster:
+          x-ezu-complete: {workflowId: list, selector: "$.clusters[*].name"}
           type: string
           description: Cluster name or id
         user:
@@ -686,6 +692,7 @@ workflows:
       required: [cluster, authority]
       properties:
         cluster:
+          x-ezu-complete: {workflowId: list, selector: "$.clusters[*].name"}
           type: string
           description: Cluster name or id
         authority:
@@ -723,6 +730,7 @@ workflows:
       required: [cluster]
       properties:
         cluster:
+          x-ezu-complete: {workflowId: list, selector: "$.clusters[*].name"}
           type: string
           description: Cluster name or id
     steps:
@@ -753,6 +761,7 @@ workflows:
       required: [cluster]
       properties:
         cluster:
+          x-ezu-complete: {workflowId: list, selector: "$.clusters[*].name"}
           type: string
           description: Cluster name or id
     steps:
@@ -783,6 +792,7 @@ workflows:
       required: [cluster]
       properties:
         cluster:
+          x-ezu-complete: {workflowId: list, selector: "$.clusters[*].name"}
           type: string
           description: Cluster name or id
     steps:
@@ -823,6 +833,7 @@ workflows:
       required: [cluster]
       properties:
         cluster:
+          x-ezu-complete: {workflowId: list, selector: "$.clusters[*].name"}
           type: string
           description: Cluster name or id
     steps:
@@ -863,6 +874,7 @@ workflows:
       required: [cluster]
       properties:
         cluster:
+          x-ezu-complete: {workflowId: list, selector: "$.clusters[*].name"}
           type: string
           description: Cluster name or id
     steps:
@@ -903,6 +915,7 @@ workflows:
       required: [cluster]
       properties:
         cluster:
+          x-ezu-complete: {workflowId: list, selector: "$.clusters[*].name"}
           type: string
           description: Cluster name or id
     steps:
@@ -943,12 +956,14 @@ workflows:
       required: [cluster]
       properties:
         cluster:
+          x-ezu-complete: {workflowId: list, selector: "$.clusters[*].name"}
           type: string
           description: Cluster name or id
         exoscale-nodeclass:
           type: boolean
           description: Generate the ExoscaleNodeClass manifest (with nodepool=true too, or neither, both are)
         nodepool:
+          x-ezu-complete: {workflowId: nodepool-list, parameters: [{name: cluster, value: $inputs.cluster}], selector: "$.nodepools[*].name"}
           type: boolean
           description: Generate the NodePool manifest (with exoscale-nodeclass=true too, or neither, both are)
     steps:
@@ -1066,9 +1081,11 @@ workflows:
       required: [cluster, nodepool]
       properties:
         cluster:
+          x-ezu-complete: {workflowId: list, selector: "$.clusters[*].name"}
           type: string
           description: Cluster name or id
         nodepool:
+          x-ezu-complete: {workflowId: nodepool-list, parameters: [{name: cluster, value: $inputs.cluster}], selector: "$.nodepools[*].name"}
           type: string
           description: Nodepool name or id
     steps:
@@ -1104,6 +1121,7 @@ workflows:
       required: [cluster, name]
       properties:
         cluster:
+          x-ezu-complete: {workflowId: list, selector: "$.clusters[*].name"}
           type: string
           description: Cluster name or id
         name:
@@ -1296,9 +1314,11 @@ workflows:
       required: [cluster, nodepool]
       properties:
         cluster:
+          x-ezu-complete: {workflowId: list, selector: "$.clusters[*].name"}
           type: string
           description: Cluster name or id
         nodepool:
+          x-ezu-complete: {workflowId: nodepool-list, parameters: [{name: cluster, value: $inputs.cluster}], selector: "$.nodepools[*].name"}
           type: string
           description: Nodepool name or id
         name:
@@ -1424,9 +1444,11 @@ workflows:
       required: [cluster, nodepool, size]
       properties:
         cluster:
+          x-ezu-complete: {workflowId: list, selector: "$.clusters[*].name"}
           type: string
           description: Cluster name or id
         nodepool:
+          x-ezu-complete: {workflowId: nodepool-list, parameters: [{name: cluster, value: $inputs.cluster}], selector: "$.nodepools[*].name"}
           type: string
           description: Nodepool name or id
         size:
@@ -1482,9 +1504,11 @@ workflows:
       required: [cluster, nodepool, instances]
       properties:
         cluster:
+          x-ezu-complete: {workflowId: list, selector: "$.clusters[*].name"}
           type: string
           description: Cluster name or id
         nodepool:
+          x-ezu-complete: {workflowId: nodepool-list, parameters: [{name: cluster, value: $inputs.cluster}], selector: "$.nodepools[*].name"}
           type: string
           description: Nodepool name or id
         instances:
@@ -1542,9 +1566,11 @@ workflows:
       required: [cluster, nodepool]
       properties:
         cluster:
+          x-ezu-complete: {workflowId: list, selector: "$.clusters[*].name"}
           type: string
           description: Cluster name or id
         nodepool:
+          x-ezu-complete: {workflowId: nodepool-list, parameters: [{name: cluster, value: $inputs.cluster}], selector: "$.nodepools[*].name"}
           type: string
           description: Nodepool name or id
     steps:

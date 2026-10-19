@@ -115,6 +115,31 @@ $ vm get-instance 0b6f3c2e
 
 ezu prints the command rather than running it: the name is yours to choose, and so is where the link goes. `vm completion fish` (or `bash`, `zsh`) gives the completion of the new command; `vm --help` lists its workflows. Under its own name, or a name nothing is configured for, ezu is itself.
 
+### Completing values
+
+`x-ezu-complete`, an ezu extension on an input, names a workflow of the same document that lists the input's values, and a JSONPath `selector` that picks them from its outputs; `parameters` pass it inputs already on the command line:
+
+```yaml
+inputs:
+  properties:
+    cluster:
+      type: string
+      x-ezu-complete: {workflowId: list, selector: "$.clusters[*].name"}
+    nodepool:
+      type: string
+      x-ezu-complete:
+        workflowId: nodepool-list
+        parameters: [{name: cluster, value: $inputs.cluster}]
+        selector: "$.nodepools[*].name"
+```
+
+```console
+$ exo compute sks nodepool show prod <Tab>
+nodepool=  workers  gpu
+```
+
+On Tab, the workflow runs with the document's profile, at most 5 seconds, and its values are kept a minute; they are offered for the positional input that comes next and after `NAME=`. When it fails, completion goes on without them. `--check` checks the workflow exists and the selector parses.
+
 ### Asking first
 
 `x-ezu-confirm`, an ezu extension, is a question a workflow asks before it runs, with inputs embedded as `{$inputs.NAME}`:

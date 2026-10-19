@@ -108,6 +108,7 @@ workflows:
       required: [vpc]
       properties:
         vpc:
+          x-ezu-complete: {workflowId: vpc-list, selector: "$.vpcs[*].name"}
           type: string
           description: VPC name or id
     steps:
@@ -183,6 +184,7 @@ workflows:
       required: [vpc]
       properties:
         vpc:
+          x-ezu-complete: {workflowId: vpc-list, selector: "$.vpcs[*].name"}
           type: string
           description: VPC name or id
         name:
@@ -231,6 +233,7 @@ workflows:
       required: [vpc]
       properties:
         vpc:
+          x-ezu-complete: {workflowId: vpc-list, selector: "$.vpcs[*].name"}
           type: string
           description: VPC name or id
     steps:
@@ -291,9 +294,11 @@ workflows:
       required: [vpc, subnet]
       properties:
         vpc:
+          x-ezu-complete: {workflowId: vpc-list, selector: "$.vpcs[*].name"}
           type: string
           description: VPC name or id
         subnet:
+          x-ezu-complete: {workflowId: vpc-subnet-list, parameters: [{name: vpc, value: $inputs.vpc}], selector: "$.subnets[*].name"}
           type: string
           description: Subnet name or id
     steps:
@@ -334,6 +339,7 @@ workflows:
       required: [vpc, name]
       properties:
         vpc:
+          x-ezu-complete: {workflowId: vpc-list, selector: "$.vpcs[*].name"}
           type: string
           description: VPC name or id
         name:
@@ -409,9 +415,11 @@ workflows:
       required: [vpc, subnet]
       properties:
         vpc:
+          x-ezu-complete: {workflowId: vpc-list, selector: "$.vpcs[*].name"}
           type: string
           description: VPC name or id
         subnet:
+          x-ezu-complete: {workflowId: vpc-subnet-list, parameters: [{name: vpc, value: $inputs.vpc}], selector: "$.subnets[*].name"}
           type: string
           description: Subnet name or id
         name:
@@ -474,9 +482,11 @@ workflows:
       required: [vpc, subnet]
       properties:
         vpc:
+          x-ezu-complete: {workflowId: vpc-list, selector: "$.vpcs[*].name"}
           type: string
           description: VPC name or id
         subnet:
+          x-ezu-complete: {workflowId: vpc-subnet-list, parameters: [{name: vpc, value: $inputs.vpc}], selector: "$.subnets[*].name"}
           type: string
           description: Subnet name or id
     steps:
@@ -515,9 +525,11 @@ workflows:
       required: [vpc, subnet, instance]
       properties:
         vpc:
+          x-ezu-complete: {workflowId: vpc-list, selector: "$.vpcs[*].name"}
           type: string
           description: VPC name or id
         subnet:
+          x-ezu-complete: {workflowId: vpc-subnet-list, parameters: [{name: vpc, value: $inputs.vpc}], selector: "$.subnets[*].name"}
           type: string
           description: Subnet name or id
         instance:
@@ -587,9 +599,11 @@ workflows:
       required: [vpc, subnet, instance]
       properties:
         vpc:
+          x-ezu-complete: {workflowId: vpc-list, selector: "$.vpcs[*].name"}
           type: string
           description: VPC name or id
         subnet:
+          x-ezu-complete: {workflowId: vpc-subnet-list, parameters: [{name: vpc, value: $inputs.vpc}], selector: "$.subnets[*].name"}
           type: string
           description: Subnet name or id
         instance:
@@ -720,9 +734,11 @@ workflows:
       required: [vpc, subnet, destination, target]
       properties:
         vpc:
+          x-ezu-complete: {workflowId: vpc-list, selector: "$.vpcs[*].name"}
           type: string
           description: VPC name or id
         subnet:
+          x-ezu-complete: {workflowId: vpc-subnet-list, parameters: [{name: vpc, value: $inputs.vpc}], selector: "$.subnets[*].name"}
           type: string
           description: Name or id of the subnet to create the route in
         destination:
@@ -779,12 +795,14 @@ workflows:
       required: [vpc, route, subnet]
       properties:
         vpc:
+          x-ezu-complete: {workflowId: vpc-list, selector: "$.vpcs[*].name"}
           type: string
           description: VPC name or id
         route:
           type: string
           description: Route id, as `vpc route list` lists them
         subnet:
+          x-ezu-complete: {workflowId: vpc-subnet-list, parameters: [{name: vpc, value: $inputs.vpc}], selector: "$.subnets[*].name"}
           type: string
           description: Name or id of the subnet the route belongs to
     steps:

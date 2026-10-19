@@ -406,7 +406,32 @@ data holding them."
         (let [scope {: wf
                      : steps
                      :wf-params (if (list? wf.parameters) wf.parameters [])}
-              question (. wf :x-ezu-confirm)]
+              question (. wf :x-ezu-confirm)
+              (inputs-ok inputs-schema) (pcall arazzo.workflow-inputs doc wf)]
+          ;; what lists an input's values for completion (an ezu extension)
+          (each [name prop (pairs (or (when (and inputs-ok
+                                                 (= (type inputs-schema) :table))
+                                        inputs-schema.properties)
+                                      {}))]
+            (let [spec (when (= (type prop) :table) (. prop :x-ezu-complete))
+                  at (.. "input " (tostring name) ": x-ezu-complete")]
+              (if (= nil spec) nil
+                  (not (and (= (type spec) :table)
+                            (= (type spec.workflowId) :string)
+                            (= (type spec.selector) :string)))
+                  (report :error where
+                          (.. at
+                              " must be an object with a workflowId and a selector"))
+                  (do
+                    (when (not (. workflows spec.workflowId))
+                      (report :error where
+                              (.. at " names unknown workflow '"
+                                  spec.workflowId "'")))
+                    (when (not (spec.selector:find "{$" 1 true))
+                      (let [(ok err) (pcall jsonpath.compile spec.selector)]
+                        (when (not ok)
+                          (report :error where
+                                  (.. at " selector: " (tostring err))))))))))
           (if (and (not= nil question) (not= (type question) :string))
               (report :error where
                       "x-ezu-confirm must be a question (a string)")

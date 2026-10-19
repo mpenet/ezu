@@ -950,6 +950,53 @@
                     (assert.are.same ["M /other" "sub.json /other"]
                                      [(. seen 3) (. seen 4)]))))))
 
+(describe "completion of values a workflow lists"
+          (fn []
+            (local doc
+                   {:workflows [{:workflowId "pool-show"
+                                 :x-ezu-command "pool show"
+                                 :x-ezu-args [:cluster :pool]
+                                 :inputs {:type "object"
+                                          :properties {:cluster {:type "string"
+                                                                 :x-ezu-complete {:workflowId "cluster-list"
+                                                                                  :selector "$.clusters[*].name"}}
+                                                       :pool {:type "string"
+                                                              :x-ezu-complete {:workflowId "pool-list"
+                                                                               :parameters [{:name "cluster"
+                                                                                             :value "$inputs.cluster"}]
+                                                                               :selector "$.pools[*].name"}}}}}]})
+
+            (fn complete-with [line]
+              (let [asked []
+                    ctx {:config {:arazzo {:k {:file "K"}}}
+                         :load-doc (fn [_] doc)
+                         :complete-values (fn [target d spec typed]
+                                            (table.insert asked
+                                                          [target
+                                                           spec.workflowId
+                                                           typed])
+                                            (if (= spec.workflowId
+                                                   "cluster-list")
+                                                ["prod" "test"]
+                                                ["a" "b"]))}]
+                (values (cli.complete-line line ctx) asked)))
+
+            (it "offers the values of the positional input being typed"
+                (fn []
+                  (let [(offered asked) (complete-with "az k pool show ")]
+                    (assert.are.same ["cluster=" "pool=" "prod" "test"] offered)
+                    (assert.are.same [["k" "cluster-list" {}]] asked))))
+            (it "passes the inputs typed so far to the listing workflow"
+                (fn []
+                  (let [(offered asked) (complete-with "az k pool show prod ")]
+                    (assert.are.same ["a" "b" "cluster=" "pool="] offered)
+                    (assert.are.same [["k" "pool-list" {:cluster "prod"}]]
+                                     asked))))
+            (it "completes name= values too"
+                (fn []
+                  (let [(offered) (complete-with "az k pool show cluster=p")]
+                    (assert.are.same ["cluster=prod"] offered))))))
+
 (describe "cli.complete-line"
           (fn []
             (it "completes subcommands"

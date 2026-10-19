@@ -42,6 +42,7 @@ workflows:
       required: [service]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
     steps:
@@ -67,6 +68,7 @@ workflows:
       required: [service]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
     steps:
@@ -92,6 +94,7 @@ workflows:
       required: [service]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
     steps:
@@ -117,6 +120,7 @@ workflows:
       required: [service]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
     steps:
@@ -142,6 +146,7 @@ workflows:
       required: [service]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
     steps:
@@ -167,6 +172,7 @@ workflows:
       required: [service]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
     steps:
@@ -192,6 +198,7 @@ workflows:
       required: [service]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
     steps:
@@ -217,6 +224,7 @@ workflows:
       required: [service]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
     steps:
@@ -1085,6 +1093,7 @@ workflows:
       required: [service]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         plan:
@@ -1229,6 +1238,7 @@ workflows:
       required: [service]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         plan:
@@ -1343,6 +1353,7 @@ workflows:
       required: [service]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         plan:
@@ -1446,6 +1457,7 @@ workflows:
       required: [service]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         plan:
@@ -1556,6 +1568,7 @@ workflows:
       required: [service]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         plan:
@@ -1657,6 +1670,7 @@ workflows:
       required: [service]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         plan:
@@ -1723,6 +1737,7 @@ workflows:
       required: [service]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         plan:
@@ -1789,6 +1804,7 @@ workflows:
       required: [service]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         plan:
@@ -1860,6 +1876,7 @@ workflows:
       required: [service]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
     steps:
@@ -1927,6 +1944,7 @@ workflows:
       required: [service]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         limit:
@@ -1970,6 +1988,7 @@ workflows:
       required: [service]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         period:
@@ -2017,6 +2036,7 @@ workflows:
       required: [service]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
     steps:
@@ -2052,6 +2072,7 @@ workflows:
       required: [service]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
     steps:
@@ -2087,6 +2108,7 @@ workflows:
       required: [service]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
     steps:
@@ -2122,6 +2144,7 @@ workflows:
       required: [service]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
     steps:
@@ -2157,6 +2180,7 @@ workflows:
       required: [service]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
     steps:
@@ -2192,6 +2216,7 @@ workflows:
       required: [service]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
     steps:
@@ -2227,6 +2252,7 @@ workflows:
       required: [service]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
     steps:
@@ -2262,6 +2288,7 @@ workflows:
       required: [service]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
     steps:
@@ -2297,6 +2324,7 @@ workflows:
       required: [service]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
     steps:
@@ -2332,6 +2360,7 @@ workflows:
       required: [service, version]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         version:
@@ -2511,6 +2540,7 @@ workflows:
       required: [service]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
     steps:
@@ -2536,6 +2566,7 @@ workflows:
       required: [service]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
     steps:
@@ -2561,6 +2592,7 @@ workflows:
       required: [service]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
     steps:
@@ -2586,6 +2618,7 @@ workflows:
       required: [service]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
     steps:
@@ -2611,6 +2644,7 @@ workflows:
       required: [service]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
     steps:
@@ -2636,6 +2670,7 @@ workflows:
       required: [service]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
     steps:
@@ -2661,6 +2696,7 @@ workflows:
       required: [service]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
     steps:
@@ -2686,6 +2722,7 @@ workflows:
       required: [service]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
     steps:
@@ -2711,6 +2748,7 @@ workflows:
       required: [service, username]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         username:
@@ -2745,6 +2783,7 @@ workflows:
       required: [service, username]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         username:
@@ -2779,6 +2818,7 @@ workflows:
       required: [service, username]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         username:
@@ -2813,6 +2853,7 @@ workflows:
       required: [service, username]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         username:
@@ -2847,6 +2888,7 @@ workflows:
       required: [service, username]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         username:
@@ -2881,6 +2923,7 @@ workflows:
       required: [service, username]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         username:
@@ -2915,6 +2958,7 @@ workflows:
       required: [service, username]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         username:
@@ -2949,6 +2993,7 @@ workflows:
       required: [service, username]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         username:
@@ -2983,6 +3028,7 @@ workflows:
       required: [service, username]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         username:
@@ -3031,6 +3077,7 @@ workflows:
       required: [service, username]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         username:
@@ -3080,6 +3127,7 @@ workflows:
       required: [service, username]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         username:
@@ -3124,6 +3172,7 @@ workflows:
       required: [service, username]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         username:
@@ -3168,6 +3217,7 @@ workflows:
       required: [service, username]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         username:
@@ -3237,6 +3287,7 @@ workflows:
       required: [service, username]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         username:
@@ -3280,6 +3331,7 @@ workflows:
       required: [service, username]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         username:
@@ -3316,6 +3368,7 @@ workflows:
       required: [service, username]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         username:
@@ -3352,6 +3405,7 @@ workflows:
       required: [service, username]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         username:
@@ -3388,6 +3442,7 @@ workflows:
       required: [service, username]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         username:
@@ -3424,6 +3479,7 @@ workflows:
       required: [service, username]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         username:
@@ -3460,6 +3516,7 @@ workflows:
       required: [service, username]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         username:
@@ -3513,6 +3570,7 @@ workflows:
       required: [service, username]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         username:
@@ -3563,6 +3621,7 @@ workflows:
       required: [service, username]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         username:
@@ -3618,6 +3677,7 @@ workflows:
       required: [service, username]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         username:
@@ -3668,6 +3728,7 @@ workflows:
       required: [service, username]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         username:
@@ -3718,6 +3779,7 @@ workflows:
       required: [service, username]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         username:
@@ -3768,6 +3830,7 @@ workflows:
       required: [service, username]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         username:
@@ -3818,6 +3881,7 @@ workflows:
       required: [service, username]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         username:
@@ -3857,6 +3921,7 @@ workflows:
       required: [service, username]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         username:
@@ -3888,6 +3953,7 @@ workflows:
       required: [service, username]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         username:
@@ -3919,6 +3985,7 @@ workflows:
       required: [service, username]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         username:
@@ -3950,6 +4017,7 @@ workflows:
       required: [service, username]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         username:
@@ -3981,6 +4049,7 @@ workflows:
       required: [service, username]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         username:
@@ -4012,6 +4081,7 @@ workflows:
       required: [service, username]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         username:
@@ -4043,6 +4113,7 @@ workflows:
       required: [service, username]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         username:
@@ -4074,6 +4145,7 @@ workflows:
       required: [service, username]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         username:
@@ -4105,6 +4177,7 @@ workflows:
       required: [service, username, allow-replication]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         username:
@@ -4148,6 +4221,7 @@ workflows:
       required: [service, username]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         username:
@@ -4219,6 +4293,7 @@ workflows:
       required: [service]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
     steps:
@@ -4246,6 +4321,7 @@ workflows:
       required: [service, database]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         database:
@@ -4296,6 +4372,7 @@ workflows:
       required: [service, database]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         database:
@@ -4332,6 +4409,7 @@ workflows:
       required: [service, database]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         database:
@@ -4374,6 +4452,7 @@ workflows:
       required: [service, database]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         database:
@@ -4430,6 +4509,7 @@ workflows:
       required: [service, pool, database]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         pool:
@@ -4489,6 +4569,7 @@ workflows:
       required: [service, pool]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         pool:
@@ -4551,6 +4632,7 @@ workflows:
       required: [service, pool]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         pool:
@@ -4589,6 +4671,7 @@ workflows:
       required: [service]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
     steps:
@@ -4614,6 +4697,7 @@ workflows:
       required: [service]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
     steps:
@@ -4649,6 +4733,7 @@ workflows:
       required: [service]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
     steps:
@@ -4684,6 +4769,7 @@ workflows:
       required: [service]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
     steps:
@@ -4719,6 +4805,7 @@ workflows:
       required: [service, source-service-uri]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         source-service-uri:
@@ -4772,6 +4859,7 @@ workflows:
       required: [service, id]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         id:
@@ -5179,6 +5267,7 @@ workflows:
       required: [service]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
     steps:
@@ -5204,6 +5293,7 @@ workflows:
       required: [service]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
     steps:
@@ -5229,6 +5319,7 @@ workflows:
       required: [service]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
     steps:
@@ -5254,6 +5345,7 @@ workflows:
       required: [service]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         acls:
@@ -5306,6 +5398,7 @@ workflows:
       required: [service, username, topic, permission]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         username:
@@ -5357,6 +5450,7 @@ workflows:
       required: [service, id]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         id:
@@ -5398,6 +5492,7 @@ workflows:
       required: [service, username, resource, permission]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         username:
@@ -5449,6 +5544,7 @@ workflows:
       required: [service, id]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         id:
@@ -5516,6 +5612,7 @@ workflows:
       required: [service, role]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         role:
@@ -6662,6 +6759,7 @@ workflows:
       required: [service, endpoint]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         endpoint:
@@ -6710,6 +6808,7 @@ workflows:
       required: [service, id]
       properties:
         service:
+          x-ezu-complete: {workflowId: list, selector: "$.services[*].name"}
           type: string
           description: Database service name
         id:

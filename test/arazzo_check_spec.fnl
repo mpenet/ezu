@@ -322,6 +322,30 @@
                                                     clients)
                                        "wf: no input 'nope' in workflow wf"
                                        :error))))
+            (it "checks what lists an input's values"
+                (fn []
+                  (let [with-complete #(doc []
+                                            {:inputs {:type "object"
+                                                      :properties {:id {:type "string"
+                                                                        :x-ezu-complete $}}}})]
+                    (assert.is_true (has (check.check (with-complete {:workflowId "nope"
+                                                                      :selector "$[*]"})
+                                                      clients)
+                                         "wf: input id: x-ezu-complete names unknown workflow 'nope'"
+                                         :error))
+                    (assert.is_true (has (check.check (with-complete {:workflowId "wf"
+                                                                      :selector "$[?"})
+                                                      clients)
+                                         "wf: input id: x-ezu-complete selector"
+                                         :error))
+                    (assert.is_true (has (check.check (with-complete "wf")
+                                                      clients)
+                                         "wf: input id: x-ezu-complete must be an object with a workflowId and a selector"
+                                         :error))
+                    (assert.are.same []
+                                     (messages (check.check (with-complete {:workflowId "wf"
+                                                                            :selector "$.ids[*]"})
+                                                            clients))))))
             (it "leaves the options it is given as they are"
                 (fn []
                   (let [opts {:trust-sources false}]

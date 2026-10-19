@@ -65,6 +65,7 @@ workflows:
       required: [key]
       properties:
         key:
+          x-ezu-complete: {workflowId: key-list, selector: "$['kms-keys'][*].name"}
           type: string
           description: KMS key name or id
     steps:
@@ -135,6 +136,7 @@ workflows:
       required: [key]
       properties:
         key:
+          x-ezu-complete: {workflowId: key-list, selector: "$['kms-keys'][*].name"}
           type: string
           description: KMS key name or id
     steps:
@@ -168,6 +170,7 @@ workflows:
       required: [key]
       properties:
         key:
+          x-ezu-complete: {workflowId: key-list, selector: "$['kms-keys'][*].name"}
           type: string
           description: KMS key name or id
     steps:
@@ -201,6 +204,7 @@ workflows:
       required: [key, target-zone]
       properties:
         key:
+          x-ezu-complete: {workflowId: key-list, selector: "$['kms-keys'][*].name"}
           type: string
           description: KMS key name or id
         target-zone:
@@ -241,6 +245,7 @@ workflows:
       required: [key]
       properties:
         key:
+          x-ezu-complete: {workflowId: key-list, selector: "$['kms-keys'][*].name"}
           type: string
           description: KMS key name or id
     steps:
@@ -271,6 +276,7 @@ workflows:
       required: [key]
       properties:
         key:
+          x-ezu-complete: {workflowId: key-list, selector: "$['kms-keys'][*].name"}
           type: string
           description: KMS key name or id
         rotation-period:
@@ -309,6 +315,7 @@ workflows:
       required: [key]
       properties:
         key:
+          x-ezu-complete: {workflowId: key-list, selector: "$['kms-keys'][*].name"}
           type: string
           description: KMS key name or id
     steps:
@@ -339,6 +346,7 @@ workflows:
       required: [key]
       properties:
         key:
+          x-ezu-complete: {workflowId: key-list, selector: "$['kms-keys'][*].name"}
           type: string
           description: KMS key name or id
     steps:
@@ -370,6 +378,7 @@ workflows:
       required: [key]
       properties:
         key:
+          x-ezu-complete: {workflowId: key-list, selector: "$['kms-keys'][*].name"}
           type: string
           description: KMS key name or id
         delay-days:
@@ -408,6 +417,7 @@ workflows:
       required: [key]
       properties:
         key:
+          x-ezu-complete: {workflowId: key-list, selector: "$['kms-keys'][*].name"}
           type: string
           description: KMS key name or id
     steps:
@@ -443,6 +453,7 @@ workflows:
       required: [key, plaintext]
       properties:
         key:
+          x-ezu-complete: {workflowId: key-list, selector: "$['kms-keys'][*].name"}
           type: string
           description: KMS key name or id
         plaintext:
@@ -484,6 +495,7 @@ workflows:
       required: [key, ciphertext]
       properties:
         key:
+          x-ezu-complete: {workflowId: key-list, selector: "$['kms-keys'][*].name"}
           type: string
           description: KMS key name or id
         ciphertext:
@@ -525,6 +537,7 @@ workflows:
       required: [key]
       properties:
         key:
+          x-ezu-complete: {workflowId: key-list, selector: "$['kms-keys'][*].name"}
           type: string
           description: KMS key name or id
         key-spec:
@@ -573,6 +586,7 @@ workflows:
       required: [key, destination-key, ciphertext]
       properties:
         key:
+          x-ezu-complete: {workflowId: key-list, selector: "$['kms-keys'][*].name"}
           type: string
           description: Name or id of the KMS key the ciphertext was made with
         destination-key:

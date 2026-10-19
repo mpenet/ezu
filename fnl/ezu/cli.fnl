@@ -4,6 +4,8 @@
 (local arazzo (require :ezu.arazzo))
 (local arazzo-expr (require :ezu.arazzo.expr))
 (local arazzo-check (require :ezu.arazzo.check))
+(local cache (require :ezu.cache))
+(local jsonpath (require :ezu.jsonpath))
 (local commands (require :ezu.arazzo.commands))
 (local auth (require :ezu.auth))
 (local cli-help (require :ezu.cli.help))
@@ -457,6 +459,40 @@ context's."
                              {:ssl (merge-ssl profile p.ssl)
                               :timeout (request-timeout profile p env.config)})]
     {: named : file : doc : profile-name : profile}))
+
+(fn completion-values [env]
+  "(fn [target doc spec typed]): the values an input's x-ezu-complete lists
+(an ezu extension: {:workflowId :parameters :selector}): the workflow of doc
+it names run with the named document target's profile, its parameters'
+values taken from typed (the inputs on the line so far), spec.selector picking
+in its outputs. Kept a minute, as Tab is pressed often; [] when it fails."
+  (fn [target doc spec typed]
+    (let [inputs (collect [_ prm (ipairs (or spec.parameters []))]
+                   (values prm.name
+                           (arazzo-expr.eval {:inputs typed} prm.value)))
+          key (.. "ezu-complete:" (or (arazzo.location doc) "") "#"
+                  (tostring spec.workflowId) "?" (json.encode inputs))
+          cached (cache.get key 60)
+          wf (arazzo.find-workflow doc spec.workflowId)]
+      (if cached cached (not wf) []
+          (let [named (?. env.config :arazzo target)
+                profile-name (?. named :profile)
+                context {: named
+                         :file (or (arazzo.location doc) (?. named :file))
+                         : doc
+                         : profile-name
+                         :profile (find-profile env.config profile-name)}
+                ;; Tab mustn't wait long, nor print anything
+                run (workflow-runner context {:timeout 5} env {:warn #nil})
+                (ok result) (run wf inputs)
+                found (when (and ok (= (type spec.selector) :string))
+                        (icollect [_ node (ipairs (jsonpath.query spec.selector
+                                                                  (or result.outputs
+                                                                      {})))]
+                          node.value))]
+            (when found
+              (cache.put key found))
+            (or found []))))))
 
 (fn ask-on-terminal [question]
   "What is typed on the terminal after question, or nil without one."
@@ -1128,7 +1164,7 @@ mounts, each run in its own document."
 
 (fn dispatch [args env]
   (if (= (. args 1) "__complete")
-      (run-complete args env.config)
+      (run-complete args env.config (completion-values env))
       (= (. args 1) "--version")
       (print (.. "ezu " ezu.version " (" ((. (require :ezu.curl) :version)) ")"))
       (= (. args 1) "--licenses")

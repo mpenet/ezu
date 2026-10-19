@@ -209,6 +209,8 @@ a group (:entries), or a workflow and its inputs."
               (match r.kind
                 :workflow (do
                             (set c.doc r.doc)
+                            (set c.target target)
+                            (set c.rest r.rest)
                             (set c.workflow r.workflow)
                             (set c.inputs
                                  (arazzo.workflow-inputs r.doc r.workflow)))
@@ -247,22 +249,56 @@ a group (:entries), or a workflow and its inputs."
         (icollect [_ e (ipairs (or context.entries []))]
           {:value e.word :help e.summary}) [])))
 
-(fn input-entries [context positional current]
-  "Workflow inputs as name= (those not given yet), or the values of the one
-being typed (name=…)."
+(fn typed-inputs [context]
+  "The inputs given so far after the workflow's words, positional values
+included, and the positional input that comes next."
+  (let [slots (arazzo.positional-inputs context.workflow)
+        typed {}]
+    (var n 0)
+    (each [_ w (ipairs (or context.rest []))]
+      (let [(name value) (w:match "^([%a_][%w_%-]*)=(.*)$")]
+        (if name (tset typed name value)
+            (do
+              (set n (+ n 1))
+              (match (. slots n)
+                slot (tset typed slot w))))))
+    (values typed (. slots (+ n 1)))))
+
+(fn listed-values [ctx context props input typed]
+  "The values input's x-ezu-complete (an ezu extension: a workflow listing
+them) gives, or []: completion goes on without them when it fails."
+  (let [spec (schema-field (. props input) :x-ezu-complete)]
+    (if (and (= (type spec) :table) ctx.complete-values)
+        (let [(ok found) (pcall ctx.complete-values context.target context.doc
+                                spec typed)]
+          (if (and ok (= (type found) :table)) found []))
+        [])))
+
+(fn input-entries [context positional current ctx]
+  "Workflow inputs as name= (those not given yet) and the values of the
+positional input that comes next, or the values of the one being typed
+(name=…): its allowed values, or those a workflow lists."
   (let [props (or (schema-field (?. context :inputs) :properties) {})
-        name (current:match "^([%a_][%w_%-]*)=")]
+        name (current:match "^([%a_][%w_%-]*)=")
+        (typed next-slot) (typed-inputs context)]
     (if name
-        (icollect [_ v (ipairs (or (enum-of (. props name)) []))]
-          {:value (.. name "=" (tostring v))})
+        (doto (icollect [_ v (ipairs (or (enum-of (. props name)) []))]
+                {:value (.. name "=" (tostring v))})
+          (#(each [_ v (ipairs (listed-values ctx context props name typed))]
+              (table.insert $ {:value (.. name "=" (tostring v))}))))
         (let [given (collect [_ w (ipairs positional)]
                       (let [n (w:match "^([%a_][%w_%-]*)[%.=]")]
                         (when n (values n true))))]
-          (icollect [_ n (ipairs (sorted-keys props))]
-            ;; a list can take more items
-            (when (or (not (. given n))
-                      (= (schema-field (. props n) :type) :array))
-              {:value (.. n "=") :help (schema-field (. props n) :description)}))))))
+          (doto (icollect [_ n (ipairs (sorted-keys props))]
+                  ;; a list can take more items
+                  (when (or (not (. given n))
+                            (= (schema-field (. props n) :type) :array))
+                    {:value (.. n "=")
+                     :help (schema-field (. props n) :description)}))
+            (#(when next-slot
+                (each [_ v (ipairs (listed-values ctx context props next-slot
+                                                  typed))]
+                  (table.insert $ {:value (tostring v)})))))))))
 
 (fn complete-entries [line ctx]
   "Completion candidates {:value :help} for a command line typed up to the cursor."
@@ -295,7 +331,7 @@ being typed (name=…)."
                                           {:value "--dry-run" :help o.help}))))
                       offered)
                     (and (= cmd :az) context.workflow)
-                    (input-entries context positional current)
+                    (input-entries context positional current ctx)
                     (positional-entries (or ctx.config {}) positional context))
         matching (icollect [_ e (ipairs entries)]
                    (when (= current (e.value:sub 1 (length current)))
@@ -400,10 +436,11 @@ variable assignments (FOO=1 ezu op ...)."
     (set assignment (rest:match "^%s*[%a_][%w_]*=%S*%s+()")))
   (rest:match "^%s*%S+%s+(.*)$"))
 
-(fn run-complete [args ?config]
+(fn run-complete [args ?config ?complete-values]
   "Hidden backend for the shell completion scripts:
 ezu __complete [--describe] LINE-UP-TO-CURSOR. ?config: the configuration,
-else the one on disk."
+else the one on disk; ?complete-values: what lists the values of an input
+with x-ezu-complete (fn [target doc spec typed])."
   (let [;; a fetch must not keep Tab waiting long
         timeout 5
         describe? (= (. args 2) "--describe")
@@ -428,6 +465,7 @@ else the one on disk."
                               (discovered-schema $.base-url
                                                  (or $.cache-ttl 3600)))
              :load-doc arazzo.load-doc
+             :complete-values ?complete-values
              : timeout}]
     (each [_ e (ipairs (if line (complete-entries line ctx) []))]
       (print (util.printable (if (and describe? e.help)

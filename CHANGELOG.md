@@ -6,6 +6,7 @@ All notable changes to ezu, named atlas until 1.0.0-beta7. The format follows [K
 
 ### Added
 
+- `x-ezu-complete` on a workflow input names a workflow listing its values (and a selector picking them): completion runs it with the document's profile, keeps the values a minute, and offers them, `exo compute instance stop <Tab>` offering your instances. The Exoscale example completes instances, security groups, clusters, nodepools, DNS domains, database services and more.
 - `ezu mcp --arazzo` offers the command words of a document and of the documents it mounts as tools (`workflow.compute_instance_create`), each run in its own document; workflows that ask first (`x-ezu-confirm`) only with `--allow-writes`. `--trust-sources` applies to `mcp` too.
 - `x-ezu-confirm: "Delete instance {$inputs.instance}?"` on a workflow asks before it runs; only yes goes ahead, `--yes` answers for scripts, and without a terminal ezu stops. The Exoscale example asks before deleting, resetting, reverting, evicting, stopping and rebooting.
 - `--select` works on a workflow's outputs (`ezu az exo compute instance list --select=.instances[].name`), and as a table (`csv`, `tsv`), outputs that are one list print a row per item.

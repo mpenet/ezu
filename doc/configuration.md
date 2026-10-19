@@ -45,8 +45,8 @@ Settings apply in this order, first found wins: command-line option, profile, to
 | `base-url` | string | Send requests here instead of the spec's server |
 | `server-index` | number | Which of the spec's servers to use, from 1 |
 | `server` | object | Server URL variables, e.g. `{"region": "eu"}` |
-| `headers` | object | Headers sent with every request |
-| `query` | object | Query parameters sent with every request |
+| `headers` | object | Headers sent with every request; a value can be read from a [secret source](authentication.md#secrets) |
+| `query` | object | Query parameters sent with every request; a value can be read from a [secret source](authentication.md#secrets) |
 | `auth` | object | Authentication; see [Authentication](authentication.md) |
 | `tls` | object | `cert`, `key`, `ca_cert`, `insecure`; see [TLS and proxies](tls.md) |
 | `ssl` | object | `cafile`, `capath`, `certificate`, `key`, `verify`; merged with `tls`, which wins |

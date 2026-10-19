@@ -327,6 +327,10 @@ existing one."
         (url:find "?" 1 true) (.. url "&" qs)
         (.. url "?" qs))))
 
+(fn expand-home [path]
+  "path with a leading ~/ made the home directory, as a shell does."
+  (if (path:match "^~/") (.. (or (os.getenv :HOME) "~") (path:sub 2)) path))
+
 (fn normalize-segments [path]
   "Remove . and .. segments from a slash-separated path (RFC 3986): empty
 segments and a trailing slash stay; .. never climbs above the root of an
@@ -433,6 +437,7 @@ inside them are safe."
         url))))
 
 {: camel->kebab
+ : expand-home
  : normalize-segments
  : link-urls
  : query-string

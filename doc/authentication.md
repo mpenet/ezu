@@ -2,9 +2,34 @@
 
 [Documentation](README.md) › Authentication
 
-A profile's `auth` names a method and its parameters. Any parameter written `env:NAME` is read from the environment variable `NAME` when needed.
+A profile's `auth` names a method and its parameters. A parameter can be written in the configuration, or read from where your secrets are kept; see [Secrets](#secrets).
 
 Authentication runs only when a request is sent: never for `--help`, `--list`, `--servers`, `--dry-run` or completion, nor when the request's own headers already provide what it would add. A spec fetched from a URL is requested without credentials first, and with them only if the server answers 401 or 403; when the profile's `base-url` is on another origin than the spec, the spec gets neither credentials nor the profile's `headers`. Credentials are computed once per command, reused by retries and pagination, and a header given explicitly (with `--h.` or in the profile's `headers`) wins over the one authentication adds.
+
+## Secrets
+
+A value that is a secret, an auth parameter, or a profile's `headers` or `query` value, can come from elsewhere than the configuration:
+
+| Value | Read from |
+|-------|-----------|
+| `{"env": "NAME"}`, or `"env:NAME"` | The environment variable `NAME` |
+| `{"file": "~/.config/ezu/secrets/exo"}` | A file of yours that no one else can read or change (`chmod 600`), without its last newline |
+| `{"cmd": ["security", "find-generic-password", "-s", "exo", "-w"]}` | What a command prints, without its last newline; its arguments go as written, through no shell |
+
+```json
+"auth": {"name": "exoscale",
+         "params": {"key": "EXO...",
+                    "secret": {"cmd": ["security", "find-generic-password", "-s", "exo-pp", "-w"]}}}
+```
+
+A secret is read when a request needs it, once per command, and never for `--dry-run`, `--help` or completion. Errors name the value (`params.secret: command security failed (exit 44)`), never what it holds. Headers and query values read this way count as credentials, as authentication's do: redacted in logs and `--curl`, and dropped when a redirect leads to another origin.
+
+Where to keep them:
+
+- **macOS:** the Keychain, `{"cmd": ["security", "find-generic-password", "-s", "NAME", "-w"]}` (store it once with `security add-generic-password -s NAME -a "$USER" -w`).
+- **Linux desktop:** the Secret Service (GNOME Keyring, KDE Wallet), `{"cmd": ["secret-tool", "lookup", "service", "NAME"]}` (store it with `secret-tool store --label=NAME service NAME`).
+- **Password managers:** `{"cmd": ["op", "read", "op://vault/item/field"]}`, `{"cmd": ["pass", "show", "NAME"]}`, `{"cmd": ["bw", "get", "password", "NAME"]}`.
+- **Servers, containers, CI:** a file the platform provides (`/run/secrets/NAME`, systemd's `$CREDENTIALS_DIRECTORY`), or the environment.
 
 ## `bearer`
 

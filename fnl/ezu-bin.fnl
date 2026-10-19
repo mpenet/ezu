@@ -19,6 +19,10 @@
 
 (require :ezu.util)
 
+(require :ezu.trusted-file)
+
+(require :ezu.secrets)
+
 (require :ezu.digest)
 
 (require :ezu.refs)

@@ -1040,6 +1040,33 @@
                                                        {:name "bearer"
                                                         :params {:token "env:HOME"}}
                                                        {}))))
+              (it "takes parameters from a command or a file"
+                  (fn []
+                    (assert.are.same {:authorization "Bearer from-cmd"}
+                                     (auth.get-headers "p"
+                                                       {:name "bearer"
+                                                        :params {:token {:cmd ["printf"
+                                                                               "from-cmd\n"]}}}
+                                                       {}))
+                    (let [path (os.tmpname)]
+                      (with-open [f (io.open path :w)]
+                        (f:write "from-file\n"))
+                      (os.execute (.. "chmod 600 " path))
+                      (let [headers (auth.get-headers "p"
+                                                      {:name "basic"
+                                                       :params {:username "u"
+                                                                :password {:file path}}}
+                                                      {})]
+                        (os.remove path)
+                        (assert.are.same {:authorization "Basic dTpmcm9tLWZpbGU="}
+                                         headers)))))
+              (it "says which parameter's source failed"
+                  (fn []
+                    (assert.has.error #(auth.get-headers "p"
+                                                         {:name "bearer"
+                                                          :params {:token {:env "EZU_NOT_SET_42"}}}
+                                                         {})
+                                      "params.token: environment variable EZU_NOT_SET_42 is not set")))
               (it "basic encodes username and password"
                   (fn []
                     (assert.are.same {:authorization "Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ=="}

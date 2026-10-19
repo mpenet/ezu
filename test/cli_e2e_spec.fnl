@@ -2243,6 +2243,59 @@ commands, written to a new directory."
                                                       1 true)
                                       alone.err))))))
 
+(describe "secrets in profiles"
+          (fn []
+            (fn secret-file [text]
+              (let [path (os.tmpname)]
+                (with-open [f (io.open path :w)]
+                  (f:write text))
+                (os.execute (.. "chmod 600 " path))
+                path))
+
+            (local routes
+                   #{"GET https://api.test/pets/7?k=key-from-cmd" (respond 200
+                                                                           {:name "Rex"})
+                     "GET https://api.test/pets/7" (respond 200 {:name "Rex"})})
+            (it "sends headers and query values read from their sources, redacted in logs"
+                (fn []
+                  (let [path (secret-file "header-secret\n")
+                        r (with-config {:profiles {:s {:schema "test/fixtures/cli-api.json"
+                                                       :headers {:X-Api-Key {:file path}}
+                                                       :query {:k {:cmd ["printf"
+                                                                         "key-from-cmd"]}}}}}
+                            #(ezu-run ["op" "s" "get-pet" "7" "-v"] (routes)))]
+                    (os.remove path)
+                    (assert.are.equal 0 r.code r.err)
+                    (assert.are.equal "header-secret"
+                                      (. r.requests 1 :headers :x-api-key))
+                    (assert.is_nil (r.err:find "header-secret" 1 true) r.err)
+                    (assert.is_nil (r.err:find "key-from-cmd" 1 true) r.err))))
+            (it "runs no command for a dry run"
+                (fn []
+                  (let [marker (os.tmpname)
+                        _ (os.remove marker)
+                        r (with-config {:profiles {:s {:schema "test/fixtures/cli-api.json"
+                                                       :headers {:X-Api-Key {:cmd ["sh"
+                                                                                   "-c"
+                                                                                   (.. "touch "
+                                                                                       marker
+                                                                                       "; echo k")]}}}}}
+                            #(ezu-run ["op" "s" "get-pet" "7" "--dry-run"]))]
+                    (assert.are.equal 0 r.code r.err)
+                    (assert.is_truthy (r.out:find "x-api-key: <redacted>" 1
+                                                  true)
+                                      r.out)
+                    (assert.is_nil (io.open marker)))))
+            (it "refuses a source of the wrong shape"
+                (fn []
+                  (let [r (with-config {:profiles {:s {:schema "x"
+                                                       :headers {:X-Api-Key {:command ["k"]}}}}}
+                            #(ezu-run ["--version"]))]
+                    (assert.are.equal 1 r.code)
+                    (assert.is_truthy (r.err:find "config: profile s: headers.X-Api-Key must be a string, or one of"
+                                                  1 true)
+                                      r.err))))))
+
 (describe "settings in the configuration"
           (fn []
             (local json (require :ezu.json))

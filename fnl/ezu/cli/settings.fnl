@@ -7,6 +7,7 @@
 (local retry (require :ezu.retry))
 (local paginate (require :ezu.paginate))
 (local util (require :ezu.util))
+(local secrets (require :ezu.secrets))
 (local http-mod (require :ezu.http))
 (local {: option-by-name} (require :ezu.cli.args))
 (local json (require :ezu.json))
@@ -85,7 +86,16 @@ winning."
     (when (object? profile)
       (each [_ k (ipairs [:timing :no-paginate :check-response])]
         (when (not (or (= nil (. profile k)) (= :boolean (type (. profile k)))))
-          (error (.. "config: profile " name ": " k " must be true or false") 0)))))
+          (error (.. "config: profile " name ": " k " must be true or false") 0)))
+      ;; values that may come from a secret source
+      (each [section entries (pairs {:headers profile.headers
+                                     :query profile.query
+                                     "auth.params" (?. profile :auth :params)})]
+        (when (object? entries)
+          (each [k v (pairs entries)]
+            (match (when (not= :number (type v)) (secrets.problem v))
+              problem (error (.. "config: profile " name ": " section "." k " "
+                                 problem) 0)))))))
   (each [name context (pairs (or config.arazzo {}))]
     (when (not (and (object? context) (= (type context.file) :string)))
       (error (.. "config: arazzo " name
@@ -299,14 +309,26 @@ covers it."
                  ;; redirects to another origin must drop them
                  (tset :sensitive-headers names))))))
 
-(fn with-profile-query [query base-fn]
-  "Adds the profile's query parameters to each request; explicit ones win."
+(fn with-profile-query [query base-fn ?dry-run]
+  "Adds the profile's query parameters to each request; explicit ones win.
+A value read from a secret source is read on first use (never for
+?dry-run, which shows <auth>) and counts as a credential."
   (fn [req]
-    (let [merged (collect [k v (pairs query)] k v)]
+    (let [merged {}
+          sensitive (icollect [_ n (ipairs (or req.sensitive-query []))]
+                      n)]
+      (each [k v (pairs query)]
+        (if (secrets.source? v)
+            (do
+              (tset merged k
+                    (if ?dry-run "<auth>" (secrets.resolve v (.. "query." k))))
+              (table.insert sensitive k))
+            (tset merged k v)))
       (each [k v (pairs (or req.query {}))]
         (tset merged k v))
       (base-fn (doto (collect [k v (pairs req)] k v)
-                 (tset :query merged))))))
+                 (tset :query merged)
+                 (tset :sensitive-query sensitive))))))
 
 (fn client-options [profile-name profile p config ?transport]
   "Client options shared by op and az: profile headers, ssl, timeout, servers,
@@ -317,17 +339,32 @@ request signing, logging, and the transport (or dry-run printing)."
         auth-cfg (let [a (?. profile :auth)]
                    (when (and a a.name (not= a.name ""))
                      (plugins.resolve-auth config a)))
-        auth-names (if auth-cfg (auth.header-names auth-cfg) [])
+        ;; profile headers whose values a secret source gives count as
+        ;; credentials, as auth headers do
+        secret-headers (collect [k v (pairs (or (?. profile :headers) {}))]
+                         (when (secrets.source? v) (values (k:lower) v)))
+        auth-names (doto (if auth-cfg (auth.header-names auth-cfg) [])
+                     (#(each [k (pairs secret-headers)]
+                         (table.insert $ k))))
         dry-run (and p.dry-run (not p.curl))
-        auth-headers (when auth-cfg
+        authenticated (when auth-cfg
+                        (lazy-auth-headers profile-name auth-cfg
+                                           {: ssl
+                                            :timeout (request-timeout profile p
+                                                                      config)}))
+        auth-headers (when (next auth-names)
                        (if dry-run
-                           ;; --dry-run redacts credentials anyway: don't authenticate
+                           ;; --dry-run redacts credentials anyway: don't
+                           ;; authenticate, nor read secrets
                            #(collect [_ n (ipairs auth-names)] n "<auth>")
-                           (lazy-auth-headers profile-name auth-cfg
-                                              {: ssl
-                                               :timeout (request-timeout profile
-                                                                         p
-                                                                         config)})))
+                           #(doto (if authenticated
+                                      (collect [k v (pairs (authenticated))]
+                                        k
+                                        v)
+                                      {})
+                              (#(each [k v (pairs secret-headers)]
+                                  (tset $ k
+                                        (secrets.resolve v (.. "headers." k))))))))
         transport (if p.curl (printing-transport curl-command) p.dry-run
                       (printing-transport request-text)
                       (or ?transport http-mod.request))
@@ -352,11 +389,10 @@ request signing, logging, and the transport (or dry-run printing)."
         pagination (paginate-options profile p config)
         paginated (if pagination (paginate.wrap retrying pagination) retrying)
         queried (if (?. profile :query)
-                    (with-profile-query profile.query paginated)
+                    (with-profile-query profile.query paginated dry-run)
                     paginated)]
     {:headers (collect [k v (pairs (or (?. profile :headers) {}))]
-                (k:lower)
-                v)
+                (when (not (secrets.source? v)) (values (k:lower) v)))
      :auth-headers auth-headers
      ;; the authentication that isn't headers, for spec fetches
      :authorize (when (and auth-cfg (not p.dry-run))

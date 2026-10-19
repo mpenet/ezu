@@ -5,6 +5,7 @@
 (local util (require :ezu.util))
 (local socket (require :socket))
 (local digest (require :ezu.digest))
+(local secrets (require :ezu.secrets))
 
 ;; ---- helpers ----
 
@@ -16,24 +17,18 @@
 
 (local shell-quote util.shell-quote)
 
-(fn expand-env [s]
-  (if (and (= (type s) :string) (s:match "^env:(.+)"))
-      (let [(var-name) (s:match "^env:(.+)")]
-        (or (os.getenv var-name)
-            (error (.. "environment variable not set: " var-name))))
-      s))
-
 (fn param [params key]
-  "params[key] with env:NAME read from the environment, or nil."
+  "params[key], read from its source (environment, file, command) when it
+names one, or nil."
   (let [v (?. params key)]
     (when (not= nil v)
-      (expand-env v))))
+      (secrets.resolve v (.. "params." key)))))
 
 (fn required-param [auth-config key]
   (let [v (?. auth-config :params key)]
     (assert (and v (not= v ""))
             (string.format "%s auth requires params.%s" auth-config.name key))
-    (expand-env v)))
+    (secrets.resolve v (.. "params." key))))
 
 ;; the parameters each authentication method can't do without
 (local required-params
@@ -161,9 +156,8 @@ used only with the auth settings that obtained it."
 (fn client-form [params fields]
   "fields with the client's id and, when it has one, its secret."
   (doto fields
-    (tset :client_id (expand-env params.client_id))
-    (tset :client_secret
-          (when params.client_secret (expand-env params.client_secret)))))
+    (tset :client_id (param params :client_id))
+    (tset :client_secret (param params :client_secret))))
 
 (fn try-refresh [profile-name params net cached]
   (let [form (client-form params
@@ -177,8 +171,8 @@ used only with the auth settings that obtained it."
 
 (fn client-credentials [profile-name params net]
   (let [form {:grant_type "client_credentials"
-              :client_id (expand-env params.client_id)
-              :client_secret (expand-env (or params.client_secret ""))}]
+              :client_id (param params :client_id)
+              :client_secret (or (param params :client_secret) "")}]
     (tset form :scope (param params :scope))
     (tset form :audience (param params :audience))
     (store-token (post-form (param params :token_url) form net) profile-name
@@ -343,7 +337,7 @@ other requests (favicon, probes) get a 404. Returns the authorization code."
         state (random-string 32)
         code-verifier (random-string 64)
         auth-params {:response_type "code"
-                     :client_id (expand-env params.client_id)
+                     :client_id (param params :client_id)
                      :redirect_uri redirect-uri
                      :state state
                      :scope (or (param params :scope) "")
@@ -603,11 +597,11 @@ signature covers what goes on the wire."
 
 (fn plugin-headers [auth-config req]
   "The headers auth-config's plugin function adds to req: it gets the request
-as sent ({:method :url :headers :body}), the auth parameters (env: values
-read) and the helpers, and returns {:headers {name value}}."
+as sent ({:method :url :headers :body}), the auth parameters (read from
+their sources) and the helpers, and returns {:headers {name value}}."
   (let [params (collect [k v (pairs (or auth-config.params {}))]
                  k
-                 (expand-env v))
+                 (secrets.resolve v (.. "params." k)))
         (ok result) (pcall auth-config.sign
                            {:method req.method
                             :url req.url

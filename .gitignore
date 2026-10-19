@@ -10,3 +10,6 @@ luarocks.lock
 *.so
 !test/corpus/*.lua
 !tools/*.lua
+# local agent state: settings, transcripts, screenshots
+/.claude/
+/.agent-shell/

@@ -205,6 +205,7 @@ The configuration's `arazzo` section names documents and attaches a profile and 
 | `file` | Path or URL of the document |
 | `profile` | Profile whose authentication, headers, TLS and server settings apply to every request |
 | `inputs` | Default inputs |
+| `max-gotos` | Most jumps to a single step before a run aborts, as [`--max-gotos`](#actions) (default 50) |
 | `arazzo-output` | How its runs print, as [`--arazzo-output`](#output-modes) does: `final`, `steps`, `progress` or `full` |
 | `trust-sources` | `true` to load [Arazzo sources](#workflows-of-other-documents) from anywhere, not only next to the document |
 

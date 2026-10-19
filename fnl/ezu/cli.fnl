@@ -50,6 +50,7 @@
         : fetch-schema
         : retry-options
         : request-timeout
+        : configured-flags
         : load-schema-cached
         : discover-schema} (require :ezu.cli.settings))
 
@@ -481,6 +482,7 @@ context's."
           (exit 0))
         (die "--link needs a document named in the configuration's arazzo section: that name is the command's")))
   (let [{: named : doc &as context} (arazzo-context p.schema p.profile p env)
+        p (configured-flags p context.profile env.config named)
         words (doto (if p.operation [p.operation] [])
                 (#(each [_ a (ipairs (or p.path-params []))]
                     (table.insert $ a))))
@@ -731,14 +733,15 @@ a remembered location that no longer works is looked for again."
                       (tset :reload true))))))))
 
 (fn api-setup [p env usage]
-  "{:profile :schema :opts} for a command naming a profile or a spec
-(p.schema): the profile, the spec (parsed when fetched, else its path) and
-the client options."
+  "{:profile :schema :opts :p} for a command naming a profile or a spec
+(p.schema): the profile, the spec (parsed when fetched, else its path), the
+client options, and p with the flags the configuration sets."
   (let [config env.config]
     (when (not p.schema)
       (usage-with-choices usage "Configured profiles" (or config.profiles {})
                           #(or $.schema "(no schema)")))
     (let [profile (find-profile config p.schema)
+          p (configured-flags p profile config)
           opts (client-options p.schema profile p config env.transport)
           verbose (. (display-options profile p config) :verbose)
           (raw-schema schema) (if (not profile)
@@ -770,7 +773,7 @@ the client options."
                                   :authorize opts.authorize
                                   :base-url opts.base-url}
                                  verbose))
-      {: profile : schema : opts})))
+      {: profile : schema : opts : p})))
 
 (fn build-client [schema opts]
   (let [(ok c) (pcall ezu.client schema opts)]
@@ -788,9 +791,9 @@ stream (events, JSON Lines, raw output) as they arrive."
                                  (tset :stream stream)))))))
 
 (fn run-op [p env]
-  (let [config env.config
-        {: profile : schema : opts} (api-setup p env
-                                               "Usage: ezu op <profile-or-schema> [operation] [args...]")
+  (let [config env.config ;; p with the flags the configuration sets
+        {: profile : schema : opts : p} (api-setup p env
+                                                   "Usage: ezu op <profile-or-schema> [operation] [args...]")
         ;; --until reads each response whole, to check it
         _ (when (not p.until)
             (print-streams opts profile p config))]
@@ -890,6 +893,7 @@ JSON or YAML one); otherwise -d is sent as given, as JSON when it is JSON."
         profile (find-profile config p.profile)
         _ (when (and p.profile (not profile))
             (die (.. "Profile not found: " p.profile)))
+        p (configured-flags p profile config)
         opts (let [opts (client-options p.profile profile p config
                                         env.transport)]
                ;; --until reads each response whole, to check it

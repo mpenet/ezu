@@ -79,6 +79,13 @@ winning."
                                    &until (not ok)]
                         (= (type p) :string)))))
     (error "config: plugins must be a list of file paths" 0))
+  (when (not (or (= nil config.timing) (= :boolean (type config.timing))))
+    (error "config: timing must be true or false" 0))
+  (each [name profile (pairs (or config.profiles {}))]
+    (when (object? profile)
+      (each [_ k (ipairs [:timing :no-paginate :check-response])]
+        (when (not (or (= nil (. profile k)) (= :boolean (type (. profile k)))))
+          (error (.. "config: profile " name ": " k " must be true or false") 0)))))
   (each [name context (pairs (or config.arazzo {}))]
     (when (not (and (object? context) (= (type context.file) :string)))
       (error (.. "config: arazzo " name
@@ -90,6 +97,10 @@ winning."
                    (= :boolean (type (. context :trust-sources)))))
       (error (.. "config: arazzo " name ": trust-sources must be true or false")
              0))
+    (let [n (. context :max-gotos)]
+      (when (not (or (= nil n) (and (= (math.type n) :integer) (> n 0))))
+        (error (.. "config: arazzo " name
+                   ": max-gotos must be a positive integer") 0)))
     (let [modes (. option-by-name "--arazzo-output" :choices)
           mode (. context :arazzo-output)]
       (when (not (or (= nil mode)
@@ -192,6 +203,22 @@ winning. Colour is also off when ?colors (default: colors-wanted?) says so."
      :no-color (or (first-set :no-color)
                    (not (if (= nil ?colors) (colors-wanted?) ?colors)))
      :verbose (first-set :verbose)}))
+
+(fn configured-flags [p profile config ?named]
+  "p with what the configuration says for the flags its command line left
+out, the first set winning: timing (profile, then top level), no-paginate and
+check-response (profile), max-gotos (?named, the workflow document)."
+  (let [first-set (fn [key ...]
+                    (let [sources [...]]
+                      (var found nil)
+                      (for [i 1 (select "#" ...) &until (not= nil found)]
+                        (set found (?. sources i key)))
+                      found))]
+    (doto (collect [k v (pairs p)] k v)
+      (tset :timing (first-set :timing p profile config))
+      (tset :no-paginate (first-set :no-paginate p profile))
+      (tset :check-response (first-set :check-response p profile))
+      (tset :max-gotos (first-set :max-gotos p ?named)))))
 
 (fn request-timeout [profile p config]
   "Seconds a request may take: --timeout, then profile, then config."
@@ -510,6 +537,7 @@ the cache; or (nil nil reasons). What is found is cached like specs."
  : client-options
  : check-config
  : request-timeout
+ : configured-flags
  : display-options
  : fetch-schema
  : load-schema-cached

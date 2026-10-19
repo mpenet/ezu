@@ -7,6 +7,7 @@ All notable changes to ezu, named atlas until 1.0.0-beta7. The format follows [K
 ### Added
 
 - `arazzo-output` on a named workflow document in the configuration sets how its runs print (`progress`, say); `--arazzo-output` still wins.
+- More options can be set in the configuration: `timing` (top level or profile), `no-paginate` and `check-response` (profile), and `max-gotos` (named workflow document). The command line still wins; the configuration documents which options stay on it, and why.
 
 ## [1.0.0-beta8] - 2026-10-19
 

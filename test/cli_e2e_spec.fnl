@@ -2049,6 +2049,103 @@ commands, written to a new directory."
                     (assert.are.equal "✓ 2 documents, 1 workflow, 1 step: nothing wrong found"
                                       r.out))))))
 
+(describe "settings in the configuration"
+          (fn []
+            (local json (require :ezu.json))
+            (local timed
+                   {"GET https://api.test/pets/7" (doto (respond 200
+                                                                 {:name "Rex"})
+                                                    (tset :timings
+                                                          {:namelookup 0.001
+                                                           :connect 0.002
+                                                           :appconnect 0.003
+                                                           :pretransfer 0.003
+                                                           :starttransfer 0.01
+                                                           :total 0.011}))})
+            (it "timing, at the top level or in a profile, which wins"
+                (fn []
+                  (let [top (with-config {:timing true}
+                              #(ezu-run ["http"
+                                         "GET"
+                                         "https://api.test/pets/7"]
+                                        timed))
+                        off (with-config {:timing true
+                                          :profiles {:t {:base-url "https://api.test"
+                                                         :timing false}}}
+                              #(ezu-run ["http" "GET" "/pets/7" "--profile=t"]
+                                        timed))]
+                    (assert.is_truthy (top.err:find "total 11ms" 1 true)
+                                      top.err)
+                    (assert.are.equal "" off.err))))
+            (it "no-paginate in a profile"
+                (fn []
+                  (let [r (with-config {:profiles {:t {:base-url "https://h.test"
+                                                       :no-paginate true}}}
+                            #(ezu-run ["http" "/list" "--profile=t"]
+                                      {"GET https://h.test/list" (respond 200
+                                                                          [1]
+                                                                          {:content-type "application/json"
+                                                                           :link "<https://h.test/list?page=2>; rel=\"next\""})
+                                       "GET https://h.test/list?page=2" (respond 200
+                                                                                 [2])}))]
+                    (assert.are.equal 0 r.code)
+                    (assert.are.equal "[1]" (r.out:gsub "%s" "")))))
+            (it "check-response in a profile"
+                (fn []
+                  (let [file (.. (os.tmpname) ".json")]
+                    (with-open [f (io.open file :w)]
+                      (f:write (json.encode checked-api)))
+                    (let [r (with-config {:profiles {:c {:schema file
+                                                         :check-response true}}}
+                              #(ezu-run ["op" "c" "get-pet" "7"]
+                                        {"GET https://api.test/pets/7" (respond 200
+                                                                                {:id "7"})}))]
+                      (os.remove file)
+                      (assert.are.equal 1 r.code)
+                      (assert.is_truthy (r.err:find "response.id: expected integer, got string"
+                                                    1 true)
+                                        r.err)))))
+            (it "max-gotos on a workflow document"
+                (fn []
+                  (let [flow (with-open [f (io.open "test/fixtures/cli-flow.arazzo.json")]
+                               (json.decode (f:read :*a)))
+                        file (.. (os.tmpname) ".json")
+                        step (. flow :workflows 1 :steps 1)]
+                    (set (. flow :sourceDescriptions 1 :url)
+                         (.. (os.getenv "PWD") "/test/fixtures/cli-api.json"))
+                    (set step.successCriteria
+                         [{:condition "$statusCode == 299"}])
+                    (set step.onFailure
+                         [{:name "again" :type "goto" :stepId "get"}])
+                    (with-open [f (io.open file :w)]
+                      (f:write (json.encode flow)))
+                    (let [r (with-config (doto (collect [k v (pairs config)] k
+                                                 v)
+                                           (tset :arazzo
+                                                 {:loop {:file file
+                                                         :max-gotos 2}}))
+                              #(ezu-run ["az" "loop" "fetchPet" "id=7"]
+                                        {"GET https://api.test/pets/7" (respond 200
+                                                                                {:name "Rex"})}))]
+                      (os.remove file)
+                      (assert.are.equal 1 r.code)
+                      (assert.is_truthy (r.err:find "goto loop detected" 1 true)
+                                        r.err)
+                      (assert.are.equal 3 (length r.requests))))))
+            (it "refuses settings of the wrong type"
+                (fn []
+                  (each [_ [cfg message] (ipairs [[{:timing "yes"}
+                                                   "config: timing must be true or false"]
+                                                  [{:profiles {:t {:no-paginate 1}}}
+                                                   "config: profile t: no-paginate must be true or false"]
+                                                  [{:arazzo {:f {:file "x"
+                                                                 :max-gotos "9"}}}
+                                                   "config: arazzo f: max-gotos must be a positive integer"]])]
+                    (let [r (with-config cfg
+                              #(ezu-run ["--version"]))]
+                      (assert.are.equal 1 r.code)
+                      (assert.is_truthy (r.err:find message 1 true) r.err)))))))
+
 (describe "--check-response"
           (fn []
             (it "says nothing of a response that matches the spec"

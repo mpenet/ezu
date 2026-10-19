@@ -31,6 +31,7 @@ Settings apply in this order, first found wins: command-line option, profile, to
 | `output` | string | Default output format |
 | `no-color` | boolean | Never colour the output |
 | `verbose` | boolean | Always log requests and responses |
+| `timing` | boolean | Always log how long each request took, as `--timing` |
 | `timeout` | number | Default timeout, in seconds |
 | `max-pages` | number | Default page limit |
 | `retry` | object | Retry defaults: `{"attempts": 2, "unsafe": false, "max-wait": 300}` |
@@ -56,7 +57,16 @@ Settings apply in this order, first found wins: command-line option, profile, to
 | `output` | string | Output format |
 | `no-color` | boolean | Never colour the output |
 | `verbose` | boolean | Always log requests and responses |
+| `timing` | boolean | Always log how long each request took, as `--timing` |
+| `no-paginate` | boolean | Never follow `Link: rel="next"` pages, as `--no-paginate` |
+| `check-response` | boolean | Check every response against the spec, as `--check-response` |
 | `mcp` | object | `{"operations": [...]}`: the operations `ezu mcp` offers, names or `*` patterns; see [MCP server](mcp.md) |
+
+### Options in the configuration
+
+Settings that say how you like ezu to work can be set once instead of on every command: `output`, `no-color`, `verbose`, `timing`, `timeout`, `max-pages`, `retry`, `cache-ttl`, `base-url`, `server-index` and `server` (above), `no-paginate` and `check-response` (in a profile), and for a [named workflow document](arazzo.md#named-workflow-documents) `arazzo-output`, `max-gotos` and `trust-sources`. A command-line option still wins, and `false` in a profile turns off what the top level turns on.
+
+Options that say what one command does stay on the command line: `--dry-run`, `--curl`, `--select`, `--until`, `--body`, `--inputs`, `--profile`, `--reload`, and the actions (`--help`, `--list`, `--check`, `--link`, `--servers`). So do `--no-validate` and `--ignore-status`: set once, they would hide mistakes and make scripts take failures for successes, and `ezu mcp`'s `--allow-writes`, which lets an AI client change things and belongs where the server is started.
 
 A profile with `extends` takes every key of the profile it names and overrides them with its own, except `headers`, which are merged key by key. Chains (`a` extends `b` extends `c`) work; a cycle is an error. `ezu profile show NAME` prints the result.
 

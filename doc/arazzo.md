@@ -99,7 +99,7 @@ Each line gives the step's position, its id, what it calls, how long it took and
 
 On a terminal, a step's line is updated in place while it runs and while it polls, cut to the terminal's width; in a log, each attempt gets its own line. The steps of a workflow run by another one (a step, `dependsOn` or a `goto`) are indented.
 
-A failed workflow ends with `✗ workflow NAME failed` and the reason: the step, the criterion that failed with the values it compared (a regex or JSONPath condition as evaluated, its `{$expressions}` replaced), and the response's status and body (shortened). When the step ran another workflow, the reason starts with the steps that led there: `step 'find' (instance-id) › step 'list' failed: …`. ezu exits 1. `-v` shows progress as well and logs every request, credentials redacted. Outputs use the `--output` format.
+A failed workflow ends with `✗ workflow NAME failed` and the reason: the step, the criterion that failed with the values it compared (a regex or JSONPath condition as evaluated, its `{$expressions}` replaced), and the response's status and body (shortened). When the step ran another workflow, the reason starts with the steps that led there: `step 'find' (instance-id) › step 'list' failed: …`. ezu exits 1. `-v` shows progress as well and logs every request, credentials redacted. Outputs use the `--output` format, and `--select` picks in them as in responses (`--select=.instances[].name`). As a table (`csv`, `tsv`), a workflow whose outputs are one list prints a row per item: `exo compute instance list --output=table`.
 
 ## A document as its own command
 

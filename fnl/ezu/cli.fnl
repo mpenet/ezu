@@ -427,7 +427,8 @@ without running it; exit 1 when something is."
       (when reporter
         (reporter.finish ok wf.workflowId (- (socket.gettime) t0)))
       (if ok
-          (print-arazzo-result result mode output no-color)
+          (print-arazzo-result result mode output no-color p.select
+                               (util.terminal? 1))
           (die (tostring result))))))
 
 (fn arazzo-context [name ?profile-name p env]

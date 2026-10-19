@@ -646,6 +646,51 @@ does, which a streaming transport hands over one by one."
                       (assert.are.equal 1 r.code)
                       (assert.is_truthy (r.err:find "warning: condition '$statuscode == 200' can't be evaluated"
                                                     1 true))))))
+            (it "selects in the outputs"
+                (fn []
+                  (let [r (ezu-run ["az"
+                                    "flows"
+                                    "fetchPet"
+                                    "id=7"
+                                    "--select=.name"
+                                    "--output=raw"]
+                                   {"GET https://api.test/pets/7" (respond 200
+                                                                           {:name "Rex"})})]
+                    (assert.are.equal 0 r.code r.err)
+                    (assert.are.equal "Rex" r.out))))
+            (it "prints a single list output as rows"
+                (fn []
+                  (let [json (require :ezu.json)
+                        flow (with-open [f (io.open "test/fixtures/cli-flow.arazzo.json")]
+                               (json.decode (f:read :*a)))
+                        file (.. (os.tmpname) ".json")]
+                    (set (. flow :sourceDescriptions 1 :url)
+                         (.. (os.getenv "PWD") "/test/fixtures/cli-api.json"))
+                    (table.insert flow.workflows
+                                  {:workflowId "listPets"
+                                   :steps [{:stepId "list"
+                                            :operationId "listPets"
+                                            :outputs {:pets "$response.body"}}]
+                                   :outputs {:pets "$steps.list.outputs.pets"}})
+                    (with-open [f (io.open file :w)]
+                      (f:write (json.encode flow)))
+                    (let [routes {"GET https://api.test/pets" (respond 200
+                                                                       [{:id 1
+                                                                         :name "Rex"}
+                                                                        {:id 2
+                                                                         :name "Bo"}])}
+                          rows (ezu-run ["az" file "listPets" "--output=csv"]
+                                        routes)
+                          picked (ezu-run ["az"
+                                           file
+                                           "listPets"
+                                           "--output=csv"
+                                           "--select=.pets[].{name}"]
+                                          routes)]
+                      (os.remove file)
+                      (assert.are.equal 0 rows.code rows.err)
+                      (assert.are.equal "id,name\n1,Rex\n2,Bo" rows.out)
+                      (assert.are.equal "name\nRex\nBo" picked.out)))))
             (it "prints outputs as a table row"
                 (fn []
                   (let [r (ezu-run ["az"
@@ -1240,9 +1285,9 @@ does, which a streaming transport hands over one by one."
                     (assert.are.equal "--profile doesn't apply to op (it is for az)\n"
                                       r.err)
                     (assert.are.equal 0 (length r.requests)))
-                  (let [r (ezu-run ["az" "flows" "fetchPet" "--select" ".a"])]
+                  (let [r (ezu-run ["az" "flows" "fetchPet" "--list"])]
                     (assert.are.equal 1 r.code)
-                    (assert.are.equal "--select doesn't apply to az (it is for op)\n"
+                    (assert.are.equal "--list doesn't apply to az (it is for op)\n"
                                       r.err))
                   (let [r (ezu-run ["op" "p" "get-pet" "3" "--logout"])]
                     (assert.are.equal 1 r.code)

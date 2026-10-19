@@ -148,7 +148,7 @@
          :value :string
          :arg "PATH"
          :scope :op
-         :also [:http]
+         :also [:http :az]
          :help "Select nested value (e.g. .items[0].name, .items[].{id,name})"}
         {:names ["--no-color"]
          :key :no-color

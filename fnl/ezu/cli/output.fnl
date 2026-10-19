@@ -688,22 +688,40 @@ variable shows the value in effect."
       (print (.. "--- " step-id " ---")))
   (when step.response (print (render step.response.body))))
 
-(fn print-arazzo-result [result mode output no-color]
+(fn only-list [outputs]
+  "The value of outputs' one output when it is an array, else nil."
+  (let [(k v) (next outputs)]
+    (when (and k (= nil (next outputs k)) (json.array? v))
+      v)))
+
+(fn print-arazzo-result [result mode output no-color ?select ?terminal]
+  "Print a workflow's result as mode says, its outputs in the output format,
+?select picking in them as for responses. As a table (csv, tsv), outputs
+that are one list are a row per item."
   (let [render #(if (. table-fields output) (tabulate $ output)
                     (render $ output (not no-color)))
-        has-outputs (next (or result.outputs {}))]
+        outputs (or result.outputs {})
+        shown (if (and (. table-fields output) (not ?select))
+                  (or (only-list outputs) outputs)
+                  outputs)
+        print-outputs #(match (format-output {:body shown
+                                              :status 200
+                                              :headers {}}
+                                             output (not no-color) ?select
+                                             ?terminal)
+                         text (print text))]
     (match (or mode :final)
       ;; progress already went to stderr while the workflow ran
       (where (or :final :progress))
-      (when has-outputs
-        (print (render result.outputs)))
+      (when (next outputs)
+        (print-outputs))
       (where (or :steps :full))
       (do
         (each [_ step-id (ipairs (executed-steps result))]
           (print-step step-id (. result.steps step-id) render (= mode :full)))
-        (when has-outputs
+        (when (next outputs)
           (print "--- outputs ---")
-          (print (render result.outputs)))))))
+          (print-outputs))))))
 
 {: redact-header
  : wrap-log-request

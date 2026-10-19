@@ -1911,6 +1911,40 @@ absolute path, so not next to it."
                     (assert.are.equal "name: Rex" trusted.out)
                     (assert.are.equal 0 configured.code configured.err)
                     (assert.are.equal "name: Rex" configured.out))))
+            (it "takes a document's output mode from its configuration"
+                (fn []
+                  (let [cfg (doto (collect [k v (pairs config)] k v)
+                              (tset :arazzo
+                                    {:flows {:file "test/fixtures/cli-flow.arazzo.json"
+                                             :profile "yaml"
+                                             :arazzo-output "progress"}}))
+                        routes {"GET https://api.test/pets/7" (respond 200
+                                                                       {:name "Rex"})}
+                        r (with-config cfg
+                            #(ezu-run ["az" "flows" "fetchPet" "id=7"] routes))
+                        flag (with-config cfg
+                               #(ezu-run ["az"
+                                          "flows"
+                                          "fetchPet"
+                                          "id=7"
+                                          "--arazzo-output=final"]
+                                         routes))
+                        bad (with-config (doto (collect [k v (pairs config)] k
+                                                 v)
+                                           (tset :arazzo
+                                                 {:flows {:file "x.json"
+                                                          :arazzo-output "loud"}}))
+                              #(ezu-run ["az" "flows"]))]
+                    (assert.are.equal 0 r.code r.err)
+                    (assert.is_truthy (r.err:find "workflow fetchPet" 1 true)
+                                      r.err)
+                    (assert.are.equal "name: Rex" r.out)
+                    ;; the command line wins
+                    (assert.are.equal "" flag.err)
+                    (assert.are.equal 1 bad.code)
+                    (assert.is_truthy (bad.err:find "config: arazzo flows: arazzo-output must be one of final, steps, progress, full"
+                                                    1 true)
+                                      bad.err))))
             (it "wants trust-sources to be true or false"
                 (fn []
                   (let [r (with-config (doto (collect [k v (pairs config)] k v)

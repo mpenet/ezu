@@ -8,6 +8,7 @@
 (local paginate (require :ezu.paginate))
 (local util (require :ezu.util))
 (local http-mod (require :ezu.http))
+(local {: option-by-name} (require :ezu.cli.args))
 (local json (require :ezu.json))
 (local {: wrap-log-request
         : wrap-log-timing
@@ -88,7 +89,14 @@ winning."
     (when (not (or (= nil (. context :trust-sources))
                    (= :boolean (type (. context :trust-sources)))))
       (error (.. "config: arazzo " name ": trust-sources must be true or false")
-             0)))
+             0))
+    (let [modes (. option-by-name "--arazzo-output" :choices)
+          mode (. context :arazzo-output)]
+      (when (not (or (= nil mode)
+                     (accumulate [found false _ m (ipairs modes) &until found]
+                       (= m mode))))
+        (error (.. "config: arazzo " name ": arazzo-output must be one of "
+                   (table.concat modes ", ")) 0))))
   config)
 
 (fn check-profile [name profile]

@@ -2,6 +2,12 @@
 
 All notable changes to ezu, named atlas until 1.0.0-beta7. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- `arazzo-output` on a named workflow document in the configuration sets how its runs print (`progress`, say); `--arazzo-output` still wins.
+
 ## [1.0.0-beta8] - 2026-10-19
 
 ### Changed

@@ -205,6 +205,7 @@ The configuration's `arazzo` section names documents and attaches a profile and 
 | `file` | Path or URL of the document |
 | `profile` | Profile whose authentication, headers, TLS and server settings apply to every request |
 | `inputs` | Default inputs |
+| `arazzo-output` | How its runs print, as [`--arazzo-output`](#output-modes) does: `final`, `steps`, `progress` or `full` |
 | `trust-sources` | `true` to load [Arazzo sources](#workflows-of-other-documents) from anywhere, not only next to the document |
 
 `--profile=NAME` uses another profile for one run. `base-url` and `server-index` are refused when the document has several OpenAPI sources, since they would be ambiguous; server variables go to the sources that declare them.

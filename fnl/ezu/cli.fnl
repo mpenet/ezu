@@ -403,7 +403,8 @@ without running it; exit 1 when something is."
 (fn execute-workflow [context wf inputs p env]
   (let [{: output : no-color : verbose} (display-options context.profile p
                                                          env.config)
-        mode (or p.arazzo-output (if verbose :progress :final))
+        mode (or p.arazzo-output (?. context :named :arazzo-output)
+                 (if verbose :progress :final))
         ;; progress goes to stderr; on a terminal, lines are rewritten in
         ;; place, unless -v interleaves the requests' logs with them
         stderr-terminal (util.terminal? 2)

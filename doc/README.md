@@ -20,6 +20,7 @@ ezu calls any HTTP API that publishes an [OpenAPI 3](https://spec.openapis.org/o
 
 - [Arazzo workflows](arazzo.md): running and writing multi-step workflows.
 - [MCP server](mcp.md): serving an API's operations, and workflows, to AI agents.
+- [Exoscale with ezu](exoscale.md): Exoscale's `exo` command line as workflows, signed by a plugin, with completion and confirmation.
 - [Moving from Restish](restish.md): importing a Restish configuration, and how the two compare.
 - [Library](library.md): using ezu from Fennel or Lua; installation and a quick start, then
   - [Clients](library/clients.md): building a client from a spec, base URLs, `$ref`s, servers;

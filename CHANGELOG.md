@@ -6,6 +6,7 @@ All notable changes to ezu, named atlas until 1.0.0-beta7. The format follows [K
 
 ### Added
 
+- [Exoscale with ezu](doc/exoscale.md): setting up the Exoscale example as an `exo` command, with the signing plugin, where to keep the key and secret, completion, questions, and MCP.
 - Secrets from where they are kept: an auth parameter, or a profile's `headers` or `query` value, can be `{"env": NAME}`, `{"file": PATH}` (a file of yours no one else can read) or `{"cmd": [COMMAND, ARG…]}` (a keychain, a password manager), read once per command when needed, never for a dry run; errors never show a value, and headers and query values read this way count as credentials.
 - `x-ezu-complete` on a workflow input names a workflow listing its values (and a selector picking them): completion runs it with the document's profile, keeps the values a minute, and offers them, `exo compute instance stop <Tab>` offering your instances. The Exoscale example completes instances, security groups, clusters, nodepools, DNS domains, database services and more.
 - `ezu mcp --arazzo` offers the command words of a document and of the documents it mounts as tools (`workflow.compute_instance_create`), each run in its own document; workflows that ask first (`x-ezu-confirm`) only with `--allow-writes`. `--trust-sources` applies to `mcp` too. A document's `mcp.workflows` in the configuration lists which to offer (`"compute instance *"`), writes included.

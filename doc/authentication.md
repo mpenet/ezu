@@ -22,7 +22,7 @@ A value that is a secret, an auth parameter, or a profile's `headers` or `query`
                     "secret": {"cmd": ["security", "find-generic-password", "-s", "exo-pp", "-w"]}}}
 ```
 
-A secret is read when a request needs it, once per command, and never for `--dry-run`, `--help` or completion. Errors name the value (`params.secret: command security failed (exit 44)`), never what it holds. Headers and query values read this way count as credentials, as authentication's do: redacted in logs and `--curl`, and dropped when a redirect leads to another origin.
+A secret is read when a request needs it, once per command (a command source costs what the command takes: about 25 ms for the macOS Keychain), and never for `--dry-run`, `--help` or completion. Errors name the value (`params.secret: command security failed (exit 44)`), never what it holds. Headers and query values read this way count as credentials, as authentication's do: redacted in logs and `--curl`, and dropped when a redirect leads to another origin.
 
 Where to keep them:
 

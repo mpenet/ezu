@@ -4430,32 +4430,33 @@ workflows:
 
   - workflowId: instance-pool-evict
     x-ezu-command: instance-pool evict
-    x-ezu-confirm: "Evict instance {$inputs.instance} from instance pool {$inputs.instance-pool}?"
-    summary: Remove an instance from an instance pool, deleting it and shrinking the pool.
-    x-ezu-args: [instance-pool, instance]
+    x-ezu-confirm: "Evict instances {$inputs.instances} from instance pool {$inputs.instance-pool}?"
+    summary: Remove instances from an instance pool, deleting them and shrinking the pool.
+    x-ezu-args: [instance-pool]
     inputs:
       type: object
-      required: [instance-pool, instance]
+      required: [instance-pool, instances]
       properties:
         instance-pool:
           x-ezu-complete: {workflowId: instance-pool-list, selector: "$['instance-pools'][*].name"}
           type: string
           description: Instance pool name or id
-        instance:
-          x-ezu-complete: {workflowId: instance-list, selector: "$.instances[*].name"}
-          type: string
-          description: Name or id of the instance to evict
+        instances:
+          x-ezu-complete:
+            workflowId: instance-pool-show
+            parameters: [{name: instance-pool, value: $inputs.instance-pool}]
+            selector: "$['instance-pool'].instances[*].id"
+          type: array
+          items:
+            type: string
+          minItems: 1
+          description: Ids of the pool's instances to evict, as instances=ID, repeated
     steps:
       - stepId: find
         workflowId: instance-pool-id
         parameters:
           - name: instance-pool
             value: $inputs.instance-pool
-      - stepId: instance
-        workflowId: $sourceDescriptions.common.instance-id
-        parameters:
-          - name: instance
-            value: $inputs.instance
       - stepId: evict
         operationId: evict-instance-pool-members
         parameters:
@@ -4465,8 +4466,7 @@ workflows:
         requestBody:
           contentType: application/json
           payload:
-            instances:
-              - $steps.instance.outputs.id
+            instances: $inputs.instances
         successCriteria:
           - condition: $statusCode == 200
         outputs:

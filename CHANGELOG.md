@@ -2,11 +2,12 @@
 
 All notable changes to ezu, named atlas until 1.0.0-beta7. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.0.0-beta10] - 2026-10-21
 
 ### Changed
 
 - Field options take their value after a space too, as other options do: `--q.limit 10` as well as `--q.limit=10` (`--h.`, `--b.`, `--server.`, `--ssl.` alike); `--q.limit` alone said `unknown option`.
+- The Exoscale example's `compute instance-pool evict` takes several instances, repeated: `instances=ID instances=ID`.
 
 ## [1.0.0-beta9] - 2026-10-19
 
@@ -321,6 +322,7 @@ The first beta with release binaries: 1.0.0-beta1 was published without them, an
 
 Earlier releases are described on the [releases page](https://github.com/mpenet/ezu/releases).
 
+[1.0.0-beta10]: https://github.com/mpenet/ezu/compare/v1.0.0-beta9...v1.0.0-beta10
 [1.0.0-beta9]: https://github.com/mpenet/ezu/compare/v1.0.0-beta8...v1.0.0-beta9
 [1.0.0-beta8]: https://github.com/mpenet/ezu/compare/v1.0.0-beta7...v1.0.0-beta8
 [1.0.0-beta7]: https://github.com/mpenet/ezu/compare/v1.0.0-beta6...v1.0.0-beta7

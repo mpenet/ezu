@@ -267,6 +267,14 @@ returns (kind key value); kind is a value of field-prefixes."
     (when kind
       (values kind k v))))
 
+(fn field-name [a]
+  "For --PREFIX.KEY arguments without a value (it is the next argument), with
+a known prefix, returns (kind key)."
+  (let [(prefix k) (a:match "^%-%-(%a+)%.([^=]+)$")
+        kind (when prefix (. field-prefixes prefix))]
+    (when kind
+      (values kind k))))
+
 (local short-prefixes {:query "--q." :header "--h." :body "--b."})
 
 (local ssl-options {:cafile true
@@ -407,7 +415,16 @@ returns (kind key value); kind is a value of field-prefixes."
                             [(a:match "^(%-%-?[%w-]+%.?)")
                              (?. family-options kind :scope)
                              (?. family-options kind :also)])
-              (add-field r kind k v)) ;; -iKEY=VAL, glued
+              (add-field r kind k v)) (field-name a)
+            (let [(kind k) (field-name a)]
+              (table.insert used
+                            [(a:match "^(%-%-?[%w-]+%.?)")
+                             (?. family-options kind :scope)
+                             (?. family-options kind :also)])
+              (set i (+ i 1))
+              (add-field r kind k
+                         (or (. args i) (error (.. a " requires a value") 0))))
+            ;; -iKEY=VAL, glued
             (or (= a "-i") (a:match "^%-i.+=") (a:match "^%-%-i%.")
                 (a:match "^%-%-input%."))
             (removed-input a (. args (+ i 1)))
@@ -431,4 +448,9 @@ returns (kind key value); kind is a value of field-prefixes."
     (check-scopes r.cmd used)
     r))
 
-{: field-prefixes : field-arg : parse-args : options : option-by-name}
+{: field-prefixes
+ : field-arg
+ : field-name
+ : parse-args
+ : options
+ : option-by-name}

@@ -2,6 +2,12 @@
 
 All notable changes to ezu, named atlas until 1.0.0-beta7. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- Field options take their value after a space too, as other options do: `--q.limit 10` as well as `--q.limit=10` (`--h.`, `--b.`, `--server.`, `--ssl.` alike); `--q.limit` alone said `unknown option`.
+
 ## [1.0.0-beta9] - 2026-10-19
 
 ### Added

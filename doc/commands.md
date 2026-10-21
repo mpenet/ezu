@@ -38,7 +38,7 @@ Operation names are the spec's `operationId`s in lowercase, dash-separated words
 
 ## Options
 
-Options go anywhere after the command. `--name=value` and `--name value` are equivalent, except for the field options (`--q.`, `--h.`, `--b.`, `--server.`, `--ssl.`), which take `NAME=VALUE` as one argument. `--` ends the options: everything after it is positional (for a path parameter starting with `-`). An unknown option, or one that doesn't apply to the command (`--profile` on `op`, `--select` on `az`), is an error.
+Options go anywhere after the command. `--name=value` and `--name value` are equivalent, field options included: `--q.limit=10` and `--q.limit 10` (`--h.`, `--b.`, `--server.` and `--ssl.` alike). `--` ends the options: everything after it is positional (for a path parameter starting with `-`). An unknown option, or one that doesn't apply to the command (`--profile` on `op`, `--select` on `az`), is an error.
 
 ## Operations (`op`)
 

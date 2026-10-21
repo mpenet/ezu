@@ -18,6 +18,27 @@
                 (fn []
                   (let [p (cli.parse-args ["op" "api" "get-x" "007" "1e3"])]
                     (assert.are.same ["007" "1e3"] p.path-params))))
+            (it "takes a field option's value from the next argument too"
+                (fn []
+                  (let [p (cli.parse-args ["op"
+                                           "api"
+                                           "get-x"
+                                           "--q.limit"
+                                           "10"
+                                           "--h.X-Trace"
+                                           "t1"
+                                           "--b.disk.size"
+                                           "-5"
+                                           "--q.status=ok"
+                                           "7"])]
+                    (assert.are.same {:limit "10" :status "ok"} p.query)
+                    (assert.are.equal "t1" (. p.headers :X-Trace))
+                    (assert.are.same ["7"] p.path-params)
+                    (assert.has.error #(cli.parse-args ["op"
+                                                        "api"
+                                                        "get-x"
+                                                        "--q.limit"])
+                                      "--q.limit requires a value"))))
             (it "accepts empty values"
                 (fn []
                   ;; a command without option scopes, to parse every family
@@ -1054,6 +1075,9 @@
                 (fn []
                   (assert.are.same ["--q.status=available" "--q.status=sold"]
                                    (complete "op exo list-pets --q.status="))
+                  ;; a field option's value given after it is no positional word
+                  (assert.are.same ["list-pets"]
+                                   (complete "op exo --q.limit 10 list-p"))
                   (assert.are.same ["--b.tier=large"]
                                    (complete "op exo add-pet --b.tier=l"))))
             (it "completes headers and body properties"

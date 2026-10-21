@@ -5,7 +5,9 @@
 (local commands (require :ezu.arazzo.commands))
 (local util (require :ezu.util))
 (local http-mod (require :ezu.http))
-(local {: field-prefixes : options : option-by-name} (require :ezu.cli.args))
+(local {: field-prefixes : field-name : options : option-by-name}
+       (require :ezu.cli.args))
+
 (local {: load-config
         : check-config
         : load-schema-cached
@@ -142,7 +144,7 @@ typed, and the positional words (values of `--name value` options skipped)."
     (var skip false)
     (each [_ w (ipairs words)]
       (if skip (set skip false)
-          (?. option-by-name w :value) (set skip true)
+          (or (?. option-by-name w :value) (field-name w)) (set skip true)
           (not (w:match "^%-")) (table.insert positional w)))
     (values words current positional)))
 

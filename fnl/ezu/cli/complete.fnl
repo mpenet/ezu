@@ -98,35 +98,29 @@ options {:ssl :timeout}."
   (or (schema-field schema :enum)
       (schema-field (schema-field schema :items) :enum)))
 
+(fn fields-of [kind context]
+  "The fields of a --PREFIX.NAME=VALUE family: {NAME {:enum :help}}."
+  (match kind
+    :query (collect [_ p (ipairs (or (?. context :op :parameters) []))]
+             (when (= p.in :query)
+               (values p.name {:enum (enum-of p.schema) :help p.description})))
+    :header (collect [_ p (ipairs (or (?. context :op :parameters) []))]
+              (when (= p.in :header)
+                (values p.name {:enum (enum-of p.schema) :help p.description})))
+    :body
+    (collect [name prop (pairs (or (schema-field (?. context :op :body-schema)
+                                                 :properties)
+                                   {}))]
+      (values name {:enum (enum-of prop)
+                    :help (schema-field prop :description)}))
+    :server (collect [name v (pairs (or (?. context :server :variables) {}))]
+              (values name {:enum v.enum :help v.description}))
+    _ {}))
+
 (fn field-entries [prefix kind context]
   "Completion entries for --PREFIX.NAME=VALUE fields: names, or enum values
 once a name and = are typed."
-  (let [fields (match kind
-                 :query (collect [_ p (ipairs (or (?. context :op :parameters)
-                                                  []))]
-                          (when (= p.in :query)
-                            (values p.name
-                                    {:enum (enum-of p.schema)
-                                     :help p.description})))
-                 :header (collect [_ p (ipairs (or (?. context :op :parameters)
-                                                   []))]
-                           (when (= p.in :header)
-                             (values p.name
-                                     {:enum (enum-of p.schema)
-                                      :help p.description})))
-                 :body (collect [name prop (pairs (or (schema-field (?. context
-                                                                        :op
-                                                                        :body-schema)
-                                                                    :properties)
-                                                      {}))]
-                         (values name
-                                 {:enum (enum-of prop)
-                                  :help (schema-field prop :description)}))
-                 :server (collect [name v (pairs (or (?. context :server
-                                                         :variables)
-                                                     {}))]
-                           (values name {:enum v.enum :help v.description}))
-                 _ {})]
+  (let [fields (fields-of kind context)]
     (fn [rest]
       (let [(name) (rest:match "^(.-)=")]
         (if name
@@ -136,8 +130,9 @@ once a name and = are typed."
               {:value (.. "--" prefix "." n "=") :help (. fields n :help)}))))))
 
 (fn split-line [line]
-  "(words current positional): the words before the cursor, the word being
-typed, and the positional words (values of `--name value` options skipped)."
+  "(words current positional pending): the words before the cursor, the word
+being typed, the positional words (values of `--name value` options skipped),
+and the option whose value is being typed, if any."
   (let [words (icollect [w (line:gmatch "%S+")] w)
         current (if (or (= line "") (line:match "%s$")) "" (table.remove words))
         positional []]
@@ -146,7 +141,16 @@ typed, and the positional words (values of `--name value` options skipped)."
       (if skip (set skip false)
           (or (?. option-by-name w :value) (field-name w)) (set skip true)
           (not (w:match "^%-")) (table.insert positional w)))
-    (values words current positional)))
+    (values words current positional (when skip (. words (length words))))))
+
+(fn option-value-entries [option context]
+  "Completion entries for the value of option given as the next word: its
+choices, or a field's enum values."
+  (let [opt (. option-by-name option)
+        (kind name) (field-name option)
+        choices (if opt opt.choices (?. (fields-of kind context) name :enum))]
+    (icollect [_ v (ipairs (or choices []))]
+      {:value (tostring v)})))
 
 (fn completion-context [ctx words positional]
   "What the line refers to: an op schema's operations, server and current
@@ -299,11 +303,11 @@ positional input that comes next, or the values of the one being typed
 
 (fn complete-entries [line ctx]
   "Completion candidates {:value :help} for a command line typed up to the cursor."
-  (let [(words current positional) (split-line line)
+  (let [(words current positional pending) (split-line line)
         cmd (. positional 1)
         context (completion-context ctx words positional)
         (prefix rest) (current:match "^%-%-(%a+)%.(.*)$")
-        entries (if prefix
+        entries (if pending (option-value-entries pending context) prefix
                     (let [kind (. field-prefixes prefix)]
                       (if kind ((field-entries prefix kind context) rest) []))
                     (current:match "^%-")

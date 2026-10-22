@@ -2,6 +2,12 @@
 
 All notable changes to ezu, named atlas until 1.0.0-beta7. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- Completion of an option's value given as the next word: `--server.zone <Tab>` offers the variable's values, `--output <Tab>` the formats, and an option with no known values offers nothing, not commands or operations.
+
 ## [1.0.0-beta10] - 2026-10-21
 
 ### Changed

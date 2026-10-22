@@ -1194,7 +1194,23 @@
                   (assert.are.same ["--server.zone="]
                                    (complete "op exo --server."))
                   (assert.are.same ["--server.zone=a" "--server.zone=b"]
-                                   (complete "op exo list-pets --server.zone="))))
+                                   (complete "op exo list-pets --server.zone="))
+                  ;; the value as the next word
+                  (assert.are.same ["a" "b"]
+                                   (complete "op exo list-pets --server.zone "))
+                  (assert.are.same ["b"]
+                                   (complete "op exo list-pets --server.zone b"))))
+            (it "completes an option's choices given as the next word"
+                (fn []
+                  (assert.are.same ["table" "tsv"]
+                                   (complete "op exo list-pets --output t"))
+                  (assert.are.same ["--q.status=available" "--q.status=sold"]
+                                   (complete "op exo list-pets --q.status="))
+                  (assert.are.same ["available" "sold"]
+                                   (complete "op exo list-pets --q.status "))
+                  ;; a value with no known choices offers no words
+                  (assert.are.same [] (complete "op exo list-pets --q.limit "))
+                  (assert.are.same [] (complete "op exo --profile "))))
             (it "completes flags"
                 (fn []
                   (assert.are.same ["--retry-max-wait="

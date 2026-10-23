@@ -6,6 +6,7 @@ All notable changes to ezu, named atlas until 1.0.0-beta7. The format follows [K
 
 ### Fixed
 
+- Server variables a base-url leaves unused are an error, rather than ignored: `--server.zone=es-mad-1` with a profile whose `base-url` names one zone sent the request to that zone. `--server.NAME` is refused with any base-url, a profile's `server` with the profile's own `base-url`.
 - Completion of an option's value given as the next word: `--server.zone <Tab>` offers the variable's values, `--output <Tab>` the formats, and an option with no known values offers nothing, not commands or operations.
 
 ## [1.0.0-beta10] - 2026-10-21

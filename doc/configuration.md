@@ -81,7 +81,7 @@ $ ezu op myapi --servers
   2. https://staging.example.com — Staging
 ```
 
-`*` marks the server in use. `--server-index=2` (or `server-index` in a profile) picks another one, `--server.region=us` (or `server` in a profile) sets a variable, and `--base-url` (or `base-url`) replaces the server altogether. Values outside a variable's allowed values are an error.
+`*` marks the server in use. `--server-index=2` (or `server-index` in a profile) picks another one, `--server.region=us` (or `server` in a profile) sets a variable, and `--base-url` (or `base-url`) replaces the server altogether. Values outside a variable's allowed values are an error, and so are variables a base-url leaves unused: `--server.` with a base-url, or a profile's `server` with its own `base-url`.
 
 ## Finding the spec
 

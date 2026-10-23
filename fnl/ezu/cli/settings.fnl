@@ -330,10 +330,28 @@ A value read from a secret source is read on first use (never for
                  (tset :query merged)
                  (tset :sensitive-query sensitive))))))
 
+(fn check-unused-server-vars [profile-name profile p]
+  "Server variables only fill in the spec's servers: refuses those a base-url
+leaves unused, --server.NAME with any base-url, and the profile's server
+when the profile sets base-url itself."
+  (let [base-url-by (if p.base-url "--base-url"
+                        (?. profile :base-url) (.. "profile " profile-name
+                                                   "'s base-url"))
+        flag-var (next (or p.server-vars {}))
+        profile-var (when (and (?. profile :base-url) (not p.base-url))
+                      (next (or (?. profile :server) {})))
+        unused (if flag-var (.. "--server." flag-var)
+                   profile-var (.. "server." profile-var " of profile "
+                                   profile-name))]
+    (when (and base-url-by unused)
+      (error (.. unused " has no effect: " base-url-by
+                 " replaces the spec's servers") 0))))
+
 (fn client-options [profile-name profile p config ?transport]
   "Client options shared by op and az: profile headers, ssl, timeout, servers,
 and the http-fn: auth headers (added on first use), pagination, retries,
 request signing, logging, and the transport (or dry-run printing)."
+  (check-unused-server-vars profile-name profile p)
   (let [ssl (merge-ssl profile p.ssl)
         verbose (. (display-options profile p config) :verbose)
         auth-cfg (let [a (?. profile :auth)]

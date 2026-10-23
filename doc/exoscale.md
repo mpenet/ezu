@@ -37,7 +37,7 @@ Then, in `~/.config/ezu/config.json`, list the plugin and give a profile the key
 }
 ```
 
-A profile without `schema` or `base-url` uses the spec's server, `https://api-{zone}.exoscale.com/v2`, in zone `ch-gva-2`. `"server": {"zone": "de-fra-1"}` in the profile picks another zone, and `--server.zone=at-vie-1` another for one command. An environment of your own (a preproduction API, say) is a `base-url` and the spec it serves: `"base-url": "https://…/v2", "schema": "https://…/v2/openapi.json"`.
+A profile without `schema` or `base-url` uses the spec's server, `https://api-{zone}.exoscale.com/v2`, in zone `ch-gva-2`. `"server": {"zone": "de-fra-1"}` in the profile picks another zone, and `--server.zone=at-vie-1` another for one command. An environment of your own (a preproduction API, say) is a `base-url` and the spec it serves: `"base-url": "https://…/v2", "schema": "https://…/v2/openapi.json"`; a `base-url` is one zone's address, so `--server.zone` is refused with it.
 
 ## Where the key and secret live
 

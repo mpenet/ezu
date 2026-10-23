@@ -1329,6 +1329,41 @@ environment; returns {:code :out :err :requests}."
                     (assert.are.equal 1 r.code)
                     (assert.is_truthy (r.err:find "unknown server variable 'region'"
                                                   1 true)))))
+            (it "refuses server variables a base-url leaves unused"
+                (fn []
+                  (with-config {:profiles {:p config.profiles.p
+                                           :fixed {:schema "test/fixtures/cli-api.json"
+                                                   :base-url "https://api.test"}
+                                           :zoned {:schema "test/fixtures/cli-api.json"
+                                                   :base-url "https://api.test"
+                                                   :server {:zone "a"}}}}
+                    (fn []
+                      (let [r (ezu-run ["op"
+                                        "fixed"
+                                        "get-pet"
+                                        "3"
+                                        "--server.zone=b"])]
+                        (assert.are.equal 1 r.code)
+                        (assert.are.same [] r.requests)
+                        (assert.is_truthy (r.err:find "--server.zone has no effect: profile fixed's base-url replaces the spec's servers"
+                                                      1 true)
+                                          r.err))
+                      (let [r (ezu-run ["op"
+                                        "p"
+                                        "get-pet"
+                                        "3"
+                                        "--base-url=https://api.test"
+                                        "--server.zone"
+                                        "b"])]
+                        (assert.are.equal 1 r.code)
+                        (assert.is_truthy (r.err:find "--server.zone has no effect: --base-url replaces the spec's servers"
+                                                      1 true)
+                                          r.err))
+                      (let [r (ezu-run ["op" "zoned" "get-pet" "3"])]
+                        (assert.are.equal 1 r.code)
+                        (assert.is_truthy (r.err:find "server.zone of profile zoned has no effect: profile zoned's base-url replaces the spec's servers"
+                                                      1 true)
+                                          r.err))))))
             (it "explains bad option values"
                 (fn []
                   (let [r (ezu-run ["op" "p" "get-pet" "3" "--output=yml"])]

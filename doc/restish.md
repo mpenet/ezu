@@ -25,10 +25,10 @@ Each API becomes a profile with the API's name; its other profiles become `API.P
 | `spec_files[0]` / `spec_url` | `schema` |
 | `headers`, `query` | `headers`, `query` |
 | `tls`, or `client_cert`, `client_key`, `ca_cert`, `insecure` | `tls` |
-| `server_variables` | `server` |
+| `server_variables` | `server`, for an API without a base URL |
 | `auth` (`name` or `type`), `auth_ref` | `auth`; `http-basic` → `basic`, `oauth-device-code` → `oauth-device-authorization`, `scopes` → `scope` |
 
-Settings with no ezu equivalent are listed as warnings rather than dropped silently: APIs without `spec_files` or a base URL, extra `spec_files`, `issuer_url` (OIDC discovery), `credentials`, `tls_signer`, `url_overrides` and `pagination`.
+Settings with no ezu equivalent are listed as warnings rather than dropped silently: APIs without `spec_files` or a base URL, extra `spec_files`, `issuer_url` (OIDC discovery), `credentials`, `tls_signer`, `url_overrides`, `pagination`, and `server_variables` next to a base URL (ezu sends requests to the base URL as it is, and refuses server variables with it).
 
 Commands map directly: `restish example list-items` becomes `ezu op example list-items`.
 

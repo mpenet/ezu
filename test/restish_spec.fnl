@@ -69,13 +69,17 @@
 (describe "restish.convert v2 (restish.json)"
           (fn []
             (let [(profiles warnings) (restish.convert (read-json "test/fixtures/restish-v2.json"))]
-              (it "maps base_url + operation_base, spec_url and server variables"
+              (it "maps base_url + operation_base and spec_url"
                   (fn []
                     (assert.are.equal "https://billing.example.com/api"
                                       profiles.billing.base-url)
                     (assert.are.equal "https://billing.example.com/openapi.yaml"
-                                      profiles.billing.schema)
-                    (assert.are.same {:region "eu"} profiles.billing.server)))
+                                      profiles.billing.schema)))
+              (it "leaves out server variables a base URL leaves unused"
+                  (fn []
+                    (assert.is_nil profiles.billing.server)
+                    (assert.is_true (has warnings
+                                         "billing: server_variables left out: ezu sends requests to the base URL as it is"))))
               (it "parses header and query lists"
                   (fn []
                     (assert.are.same {:X-Team "core" :X-Trace "on"}
@@ -139,6 +143,14 @@
                     (assert.is_false ok)
                     (assert.is_truthy (: (tostring err) :find
                                          "not a Restish configuration" 1 true)))))
+            (it "maps server variables without a base URL"
+                (fn []
+                  (let [(profiles warnings) (restish.convert {:apis {:a {:spec_files ["/a.json"]
+                                                                         :server_variables {:zone "x"
+                                                                                            :env "pp"}
+                                                                         :profiles {:default {:server_variables {:zone "y"}}}}}})]
+                    (assert.are.same {:zone "y" :env "pp"} profiles.a.server)
+                    (assert.are.same [] warnings))))
             (it "skips entries that are not what Restish writes"
                 (fn []
                   (let [json (require :ezu.json)

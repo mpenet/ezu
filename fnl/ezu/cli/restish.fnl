@@ -94,6 +94,12 @@ items are left out)."
         schema (or api.spec_url (. specs 1))
         _ (when prof.url_overrides
             (warn where "url_overrides are not supported"))
+        server (let [vars (collect [k v (pairs (or api.server_variables {}))]
+                            k
+                            v)]
+                 (each [k v (pairs (or prof.server_variables {}))]
+                   (tset vars k v))
+                 (when (next vars) vars))
         auth (or prof.auth
                  (when prof.auth_ref
                    (or (?. config :auth_profiles prof.auth_ref)
@@ -110,19 +116,18 @@ items are left out)."
       (warn where "credentials are not supported; add an auth block"))
     (when prof.tls_signer
       (warn where "tls_signer is not supported"))
+    ;; in Restish they only pick a path under the base URL; in ezu a base-url
+    ;; replaces the spec's servers, and variables with it are an error
+    (when (and server base)
+      (warn where
+            "server_variables left out: ezu sends requests to the base URL as it is"))
     (values where
             {:base-url (when base (.. base (or operation-base "")))
              : schema
              :headers (pairs->map prof.headers ":")
              :query (pairs->map prof.query "=")
              :tls (convert-tls api prof)
-             :server (let [vars (collect [k v (pairs (or api.server_variables
-                                                         {}))]
-                                  k
-                                  v)]
-                       (each [k v (pairs (or prof.server_variables {}))]
-                         (tset vars k v))
-                       (when (next vars) vars))
+             :server (when (not base) server)
              :auth (when auth (convert-auth auth where warn))})))
 
 (fn convert [config]

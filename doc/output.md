@@ -11,7 +11,7 @@ JSON, JSON Lines and YAML responses are decoded, so `--select` and every `--outp
 | `json` | The body as indented JSON with sorted keys (the default) |
 | `yaml` | The body as YAML |
 | `raw` | The body exactly as received; with `--select`, the selected value: strings as they are, an array of strings, numbers or booleans one per line, objects and other arrays as JSON |
-| `table` | An array of objects (or one object) as aligned columns under a header ruled off with `─`; an array of other values one per line |
+| `table` | An array of objects (or one object) as aligned columns under a header ruled off by a `─` line as wide as the table; an array of other values one per line |
 | `csv` | The same rows as CSV (RFC 4180 quoting), with a header |
 | `tsv` | The same rows as tab-separated values, with a header; tabs, newlines and backslashes in values written `\t`, `\n`, `\\` |
 | `status` | The status code |

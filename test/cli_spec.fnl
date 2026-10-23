@@ -1903,18 +1903,18 @@ answers candidates; one reply per line, each followed by |."
               (it "aligns columns, sorted by name, under a ruled header"
                   (fn []
                     (assert.are.equal (.. "id  name   tags\n"
-                                          "──  ─────  ─────────\n"
+                                          "────────────────────\n"
                                           "1   a      {\"k\":\"v\"}\n"
                                           "22  b,\"c\"")
                                       (cli.format-output resp :table false))))
               (it "orders columns as the selection picks them"
                   (fn []
-                    (assert.are.equal "name   id\n─────  ──\na      1\nb,\"c\"  22"
+                    (assert.are.equal "name   id\n─────────\na      1\nb,\"c\"  22"
                                       (cli.format-output resp :table false
                                                          "[].{name,id}"))))
               (it "aligns wide characters by their display width"
                   (fn []
-                    (assert.are.equal "name  id\n────  ──\n日本  1\nab    2"
+                    (assert.are.equal "name  id\n────────\n日本  1\nab    2"
                                       (cli.format-output {:status 200
                                                           :headers {}
                                                           :body [{:name "日本"

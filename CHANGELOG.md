@@ -6,7 +6,7 @@ All notable changes to ezu, named atlas until 1.0.0-beta7. The format follows [K
 
 ### Changed
 
-- `--output=table` rules the header off from the rows, a `─` line under each column.
+- `--output=table` rules the header off from the rows with a `─` line as wide as the table.
 
 ### Fixed
 

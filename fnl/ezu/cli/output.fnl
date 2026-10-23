@@ -337,11 +337,14 @@ arrays."
                           {"\\" "\\\\" "\t" "\\t" "\n" "\\n" "\r" "\\r"})))
 
 (fn aligned [rows]
-  "rows of cells as columns padded to their widest cell, two spaces apart."
+  "rows of cells as columns padded to their widest cell, two spaces apart,
+the first row (the header) ruled off from the others."
   (let [widths []]
     (each [_ row (ipairs rows)]
       (each [i cell (ipairs row)]
         (tset widths i (math.max (or (. widths i) 0) (width.of cell)))))
+    (table.insert rows 2 (icollect [_ w (ipairs widths)]
+                           (string.rep "─" w)))
     (table.concat (icollect [_ row (ipairs rows)]
                     (let [line (table.concat (icollect [i cell (ipairs row)]
                                                (.. cell

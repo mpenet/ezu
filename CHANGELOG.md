@@ -4,6 +4,10 @@ All notable changes to ezu, named atlas until 1.0.0-beta7. The format follows [K
 
 ## [Unreleased]
 
+### Changed
+
+- `--output=table` rules the header off from the rows, a `─` line under each column.
+
 ### Fixed
 
 - `profile import-restish` leaves out `server_variables` next to a base URL, with a warning, instead of writing a profile every command would now refuse.
